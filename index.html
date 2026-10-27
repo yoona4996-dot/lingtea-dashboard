@@ -1,0 +1,2054 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>링티 데일리 광고 대시보드</title></head><body><style>
+#ai-launch,#ai-panel{display:none!important}
+#pw-gate{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:var(--bg,#f6f7f9);font-family:'Nanum Gothic',sans-serif;padding:16px}
+#pw-gate form{background:#fff;border:1px solid #dde1e6;border-radius:12px;padding:28px 24px;width:100%;max-width:340px;box-shadow:0 4px 18px rgba(0,0,0,.06)}
+#pw-gate h1{font-size:18px;margin:0 0 6px;color:#1b1f24}#pw-gate p{font-size:13px;color:#5b6470;margin:0 0 16px}
+#pw-gate input{width:100%;box-sizing:border-box;font:inherit;font-size:15px;padding:10px 12px;border:1px solid #c9ced6;border-radius:8px}
+#pw-gate button{margin-top:10px;width:100%;font:inherit;font-size:15px;font-weight:700;padding:10px;border:0;border-radius:8px;background:#1f6feb;color:#fff;cursor:pointer}
+#pw-gate .err{color:#c62828;font-size:13px;min-height:18px;margin-top:8px}
+@media (prefers-color-scheme: dark){#pw-gate{background:#0f1215}#pw-gate form{background:#171b20;border-color:#2b3138}#pw-gate h1{color:#e8eaed}#pw-gate p{color:#9aa3ad}#pw-gate input{background:#0f1215;color:#e8eaed;border-color:#3a414a}}
+</style>
+<div id="pw-gate"><form id="pw-f" autocomplete="on">
+<h1>링티 데일리 광고 대시보드</h1><p>비밀번호를 입력해 주세요.</p>
+<input id="pw-i" type="password" autocomplete="current-password" aria-label="비밀번호" required>
+<button type="submit" id="pw-b">열기</button><div class="err" id="pw-e" role="alert"></div>
+</form></div>
+<script>
+(() => {
+  const SALT = 'ajswUHZOrlyYHday0Z4AVg==', ITER = 310000, CHECK = '5D/HRpH04XbY6ZYWxIAgfwju8QKgNb2PiNJ4gazLrzgKFUKQ2g==';
+  const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  let ready; const keyP = new Promise(r => ready = r);
+  const dec = async (key, buf) => crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12));
+  const derive = async (pw) => {
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: b64(SALT), iterations: ITER }, base, 256);
+    return new Uint8Array(bits);
+  };
+  const useRaw = async (raw) => {
+    const key = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']);
+    await dec(key, b64(CHECK));
+    return key;
+  };
+  const open = (key, raw) => {
+    try { sessionStorage.setItem('dash-k', btoa(String.fromCharCode(...raw)) + '|' + SALT); } catch {}
+    document.getElementById('pw-gate').remove(); ready(key);
+  };
+  window.__decFetch = async (p) => {
+    const key = await keyP;
+    const r = await fetch(p.replace(/\.csv$/, '.bin'), { cache: 'no-cache' });
+    if (!r.ok) throw new Error(p + ' ' + r.status);
+    const plain = await dec(key, new Uint8Array(await r.arrayBuffer()));
+    const s = new Blob([plain]).stream().pipeThrough(new DecompressionStream('gzip'));
+    return new Response(s).text();
+  };
+  (async () => {
+    try {
+      const [k, s] = (sessionStorage.getItem('dash-k') || '').split('|');
+      if (k && s === SALT) { const raw = b64(k); open(await useRaw(raw), raw); return; }
+    } catch {}
+  })();
+  document.getElementById('pw-f').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const b = document.getElementById('pw-b'), er = document.getElementById('pw-e');
+    b.disabled = true; b.textContent = '확인 중…'; er.textContent = '';
+    try { const raw = await derive(document.getElementById('pw-i').value); open(await useRaw(raw), raw); }
+    catch { er.textContent = '비밀번호가 맞지 않아요.'; b.disabled = false; b.textContent = '열기'; }
+  });
+})();
+</script>
+<title>링티 데일리 광고 대시보드</title>
+<style>
+/* 레이아웃: 대시보드 전체 폭 + 오른쪽 아래 작은 'AI에게 묻기' 버튼 → 오른쪽 서랍형 질문창(폰은 전체 화면) */
+:root{
+  --color-bg:#fafaf8; --color-panel:#ffffff; --color-fg:#1f1f1d; --color-fg-muted:#6b6a66; --color-border-line:rgba(31,31,29,.12);
+  --color-ok:#2e7d4f; --color-bad:#c0392b; --cds-border:rgba(31,31,29,.12); --cds-chart-axis:#55544f; --cds-chart-grid:rgba(31,31,29,.08);
+  --cds-chart-muted:#8a8984; --cds-chart-reference:#b5b4ae; --cds-chart-status-critical:#d9534f; --cds-chart-status-warning:#e8b04a;
+  --cds-text-secondary:#55544f; --cds-surface-popover:#ffffff; --cds-shadow-popover:0 8px 24px #0000001f,0 2px 6px #00000014;
+  --cds-dur-slow:.45s; --cds-font-size-body:.875rem; --cds-font-size-caption:.75rem; --cds-font-size-heading:.9375rem; --cds-font-size-title:1.375rem;
+  --cds-font-weight-medium:500; --cds-gap-xs:.5rem; --cds-gap-sm:.75rem; --cds-gap-md:1rem; --cds-gap-lg:1.75rem;
+  --cds-pad-xs:.375rem; --cds-pad-sm:.5rem; --cds-pad-md:.75rem; --cds-pad-lg:1rem; --cds-radius:.5rem;
+  /* 질문창 */
+  --bg:var(--color-bg); --panel:var(--color-panel); --ink:var(--color-fg); --muted:var(--color-fg-muted); --line:var(--color-border-line);
+  --accent:#0f7a5c; --accent-soft:#e3f2ec; --user:#eef1f6; --warn:#a15c00; --warn-soft:#fff3df;
+  --font-body:'Nanum Gothic',system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  --font-data:'Nanum Gothic Coding','Nanum Gothic',ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --color-bg:#1a1a19; --color-panel:#232322; --color-fg:#ecebe7; --color-fg-muted:#a3a29d; --color-border-line:rgba(236,235,231,.13);
+  --color-ok:#5cc08a; --color-bad:#ef6b5e; --cds-border:rgba(236,235,231,.13); --cds-chart-axis:#bdbcb7; --cds-chart-grid:rgba(236,235,231,.09);
+  --cds-chart-muted:#8f8e89; --cds-chart-reference:#6d6c68; --cds-text-secondary:#c2c1bc; --cds-surface-popover:#2c2c2a; --cds-shadow-popover:0 8px 24px #00000052,0 2px 6px #0003;
+  --accent:#4cc79d; --accent-soft:#1d3a30; --user:#2a2f37; --warn:#f0b35a; --warn-soft:#3a2d18; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --color-bg:#1a1a19; --color-panel:#232322; --color-fg:#ecebe7; --color-fg-muted:#a3a29d; --color-border-line:rgba(236,235,231,.13);
+  --color-ok:#5cc08a; --color-bad:#ef6b5e; --cds-border:rgba(236,235,231,.13); --cds-chart-axis:#bdbcb7; --cds-chart-grid:rgba(236,235,231,.09);
+  --cds-chart-muted:#8f8e89; --cds-chart-reference:#6d6c68; --cds-text-secondary:#c2c1bc; --cds-surface-popover:#2c2c2a; --cds-shadow-popover:0 8px 24px #00000052,0 2px 6px #0003;
+  --accent:#4cc79d; --accent-soft:#1d3a30; --user:#2a2f37; --warn:#f0b35a; --warn-soft:#3a2d18; color-scheme:dark}
+[hidden]{display:none!important}
+body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-body)}
+#dash-root{padding-inline:clamp(16px,3vw,32px);padding-block:20px 88px;max-width:1600px;margin:0 auto}
+.dash-skeleton{color:transparent!important;background:var(--color-border-line);border-radius:4px}
+
+/* AI 버튼 */
+#ai-launch{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:60;font:700 13px var(--font-body);border:0;cursor:pointer;
+  background:var(--color-fg);color:var(--color-bg);border-radius:999px;padding:9px 16px;box-shadow:0 2px 10px rgba(0,0,0,.2);display:inline-flex;gap:6px;align-items:center}
+#ai-launch:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#ai-launch .dot{width:7px;height:7px;border-radius:50%;background:var(--accent)}
+/* 서랍 */
+#ai-panel{position:fixed;top:0;right:0;bottom:0;width:min(440px,100%);z-index:70;background:var(--bg);border-left:1px solid var(--line);
+  box-shadow:-8px 0 24px rgba(0,0,0,.12);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.ai-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:14px 16px 8px}
+.ai-head h2{font-size:16px;font-weight:800;margin:0}
+.ai-head p{margin:2px 0 0;font-size:12px;color:var(--muted)}
+.ai-x{white-space:nowrap;flex:0 0 auto;font:inherit;font-size:13px;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:8px;padding:4px 10px;cursor:pointer}
+.ai-scroll{flex:1;min-height:0;overflow-y:auto;padding:0 16px 12px;display:flex;flex-direction:column;gap:12px;font-size:14px;line-height:1.6}
+.facts{display:flex;flex-wrap:wrap;gap:5px}
+.fact{font-size:11.5px;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:2px 9px;color:var(--muted);font-variant-numeric:tabular-nums}
+.fact b{color:var(--ink);font-weight:700}
+.fact.warn{border-color:transparent;background:var(--warn-soft);color:var(--warn)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:9px;padding:6px 10px;cursor:pointer;text-align:left}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+.chip:focus-visible,#ai-panel button:focus-visible,#ai-q:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#ai-log{display:flex;flex-direction:column;gap:12px}
+.msg{min-width:0;border-radius:12px;padding:10px 14px}
+.msg.user{align-self:flex-end;background:var(--user);max-width:88%;white-space:pre-wrap}
+.msg.ai{background:var(--panel);border:1px solid var(--line)}
+.msg.ai .steps{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--muted);margin-bottom:6px}
+.msg.ai .steps:empty{display:none}
+.msg.ai .steps div::before{content:"· ";color:var(--accent)}
+.msg.ai .body > :first-child{margin-top:0}
+.msg.ai .body > :last-child{margin-bottom:0}
+.body h1,.body h2,.body h3{font-size:15px;margin:12px 0 6px}
+.body p{margin:6px 0}
+.body ul,.body ol{margin:6px 0;padding-left:20px}
+.body code{font-family:var(--font-data);font-size:12.5px;background:var(--accent-soft);padding:0 4px;border-radius:4px}
+.tbl{overflow-x:auto;margin:8px 0}
+.body table{border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums;min-width:100%}
+.body th,.body td{border-bottom:1px solid var(--line);padding:4px 7px;text-align:right;white-space:nowrap}
+.body th{color:var(--muted);font-weight:700;background:var(--bg)}
+.body th:first-child,.body td:first-child{text-align:left}
+.note{font-size:12px;color:var(--warn);margin-top:6px}
+.empty{color:var(--muted);font-size:13px;border:1px dashed var(--line);border-radius:12px;padding:12px}
+#ai-f{padding:10px 16px 12px;border-top:1px solid var(--line);background:var(--bg)}
+.box{display:flex;gap:6px;align-items:flex-end;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px}
+#ai-q{flex:1;min-width:0;resize:none;border:0;background:transparent;color:var(--ink);font:inherit;font-size:14px;padding:6px 8px;max-height:140px}
+#ai-q:focus{outline:none}
+.btn{font:inherit;font-weight:700;font-size:13.5px;border:0;border-radius:9px;padding:7px 14px;cursor:pointer;background:var(--accent);color:var(--panel)}
+.btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
+.btn:disabled{opacity:.45;cursor:default}
+.foot{margin-top:6px;font-size:11px;color:var(--muted);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.foot button{font:inherit;background:none;border:0;color:var(--muted);text-decoration:underline;cursor:pointer;padding:0}
+@media (min-width:1100px){ body.ai-open #dash-root{margin-right:440px} }
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nanum+Gothic+Coding&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script>
+/* 대시보드 페이지가 쓰는 dash API를 이 페이지의 데이터 파일로 제공 */
+(() => {
+  const FILES = { cube:'data/cube.csv', camp:'data/camp.csv', sales:'data/sales.csv', sprod:'data/sprod.csv', scov:'data/scov.csv', promo:'data/promo.csv', cube25:'data/cube25.csv' };
+  const texts = {};
+  window.__csvText = (p) => texts[p] || (texts[p] = window.__decFetch(p));
+  const state = {}; const fns = []; let params = {}; let page = 'summary'; let queued = false;
+  const run = () => { queued = false; for (const f of fns) { try { f(); } catch (e) { console.error(e); } } };
+  const kick = () => { if (!queued) { queued = true; requestAnimationFrame(run); } };
+  const load = (id) => {
+    if (state[id]) return state[id];
+    state[id] = { status: 'loading', data: [], rows: [], columns: [], meta: [], refreshing: false };
+    window.__csvText(FILES[id]).then(t => {
+      const rows = d3.csvParse(t.replace(/^﻿/, ''));
+      state[id] = { status: 'ok', data: rows, rows, columns: rows.columns, meta: [], refreshing: false }; kick();
+    }).catch(e => { state[id] = { status: 'error', data: [], rows: [], columns: [], meta: [], message: String(e), refreshing: false }; kick(); });
+    return state[id];
+  };
+  window.dash = {
+    data: (id) => FILES[id] ? load(id) : { status: 'missing', data: [], rows: [], columns: [], meta: [] },
+    onData: (fn) => { fns.push(fn); try { fn(); } catch (e) { console.error(e); } },
+    calc: () => {}, loader: () => {}, refresh: () => {},
+    colors: ['#3b6fd1', '#d9822b', '#2a9d8f', '#c4497a', '#7a5cc7', '#8a9a3b', '#4aa3c7', '#b0603a'],
+    params: () => ({ ...params }),
+    setParams: (p) => { params = { ...params, ...(p || {}) }; kick(); },
+    resetParams: () => { params = {}; kick(); },
+    setLink: (id) => { page = id; },
+  };
+  window.__dashView = () => ({ page, params: { ...params } });
+  addEventListener('resize', kick);
+})();
+</script>
+<div id="dash-root">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+:root,.lx{--font-anthropic-sans:'Nanum Gothic','NanumGothic','나눔고딕',sans-serif;--font-anthropic-serif:'Nanum Gothic','NanumGothic','나눔고딕',sans-serif}
+.lx,.lx button,.lx input,.lx select,.lx svg text,.lx-tip{font-family:'Nanum Gothic','NanumGothic','나눔고딕',sans-serif}
+.lx{font-family:var(--font-anthropic-sans);display:flex;flex-direction:column;gap:var(--cds-gap-lg);font-variant-numeric:tabular-nums}
+.lx h2{font-size:var(--cds-font-size-heading);font-weight:var(--cds-font-weight-medium);margin:0;text-wrap:balance}
+.lx-head{display:flex;flex-direction:column;gap:var(--cds-gap-xs)}
+.lx-head h1{font-family:var(--font-anthropic-serif);font-weight:400;font-size:var(--cds-font-size-title);margin:0}
+.lx-take{color:var(--color-fg-muted);font-size:var(--cds-font-size-body);margin:0;max-width:72ch}
+.lx-filters{display:flex;flex-wrap:wrap;gap:var(--cds-gap-sm);align-items:center;padding:var(--cds-pad-md);background:var(--color-panel);border:1px solid var(--color-border-line);border-radius:var(--cds-radius)}
+.lx-filters label{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);display:flex;align-items:center;gap:var(--cds-gap-xs)}
+.lx-filters input[type=date],.lx-filters select{font:inherit;font-size:var(--cds-font-size-caption);padding:var(--cds-pad-xs) var(--cds-pad-sm);border:1px solid var(--color-border-line);border-radius:var(--cds-radius);background:var(--color-bg);color:var(--color-fg)}
+.lx-slicers{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,9.5rem),1fr));gap:var(--cds-gap-sm);width:100%}
+.lx-sl{border:1px solid var(--color-border-line);border-radius:var(--cds-radius);background:var(--color-bg);padding:var(--cds-pad-xs) var(--cds-pad-sm) var(--cds-pad-sm);display:flex;flex-direction:column;gap:var(--cds-gap-xs);min-width:0}
+.lx-sl.wide{grid-column:span 2}
+.lx-sl.full{grid-column:1/-1}
+.lx-sl-h{display:flex;justify-content:space-between;align-items:center;font-size:var(--cds-font-size-caption);font-weight:var(--cds-font-weight-medium);color:var(--color-fg)}
+.lx-sl-x{font:inherit;font-size:11px;border:0;background:transparent;color:var(--color-fg-muted);cursor:pointer;padding:2px 4px;border-radius:4px}
+.lx-sl-x[disabled]{visibility:hidden}
+.lx-sl-btns{display:flex;gap:2px}
+.lx-sl-b{display:flex;flex-wrap:wrap;gap:4px;align-content:flex-start;flex:0 0 auto}
+.lx-chip{flex:0 0 auto;font:inherit;font-size:12px;line-height:1.3;text-align:left;padding:5px 9px;border:1px solid var(--color-border-line);border-radius:4px;background:var(--color-panel);color:var(--color-fg);cursor:pointer;white-space:nowrap}
+.lx-chip:hover{border-color:var(--color-fg-muted)}
+.lx-chip[aria-pressed="true"]{background:color-mix(in srgb,var(--lx-acc) 22%,var(--color-bg));border-color:var(--lx-acc);font-weight:var(--cds-font-weight-medium)}
+.lx-chip.empty{color:var(--color-fg-muted);opacity:.55}
+.lx-chip:focus-visible,.lx-sl-x:focus-visible{outline:2px solid var(--color-fg);outline-offset:1px}
+.lx-period{display:flex;flex-wrap:wrap;gap:var(--cds-gap-sm);align-items:center;width:100%}
+.lx-quick{display:flex;gap:4px;flex-wrap:wrap}
+.lx-btn{font:inherit;font-size:var(--cds-font-size-caption);padding:var(--cds-pad-xs) var(--cds-pad-sm);border:1px solid var(--color-border-line);border-radius:var(--cds-radius);background:transparent;color:var(--color-fg);cursor:pointer}
+.lx-btn:focus-visible,.lx-tab:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
+.lx-tabs{display:flex;gap:var(--cds-gap-xs);flex-wrap:wrap;border-bottom:1px solid var(--color-border-line)}
+.lx-tab{font:inherit;font-size:var(--cds-font-size-body);padding:var(--cds-pad-sm) var(--cds-pad-md);border:0;border-bottom:2px solid transparent;background:transparent;color:var(--color-fg-muted);cursor:pointer}
+.lx-tab[aria-selected="true"]{color:var(--color-fg);border-bottom-color:var(--color-fg);font-weight:var(--cds-font-weight-medium)}
+.lx-page{display:flex;flex-direction:column;gap:var(--cds-gap-lg)}
+.lx-page[hidden]{display:none}
+.lx-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,10.5rem),1fr));gap:var(--cds-gap-md)}
+.lx-kpi{background:var(--color-panel);border:1px solid var(--color-border-line);border-radius:var(--cds-radius);padding:var(--cds-pad-md);display:flex;flex-direction:column;gap:var(--cds-gap-xs);min-width:0}
+.lx-kpi .k{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted)}
+.lx-kpi .v{font-family:var(--font-anthropic-serif);font-weight:400;font-size:var(--cds-font-size-title);line-height:1.1}
+.lx-kpi .d{font-size:var(--cds-font-size-caption)}
+.lx-kpi.lx-off .v{font-family:var(--font-anthropic-sans);font-size:var(--cds-font-size-body);color:var(--color-fg-muted)}
+.up{color:var(--color-ok)}.dn{color:var(--color-bad)}.nt{color:var(--color-fg-muted)}
+.lx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,26rem),1fr));gap:var(--cds-gap-md)}
+.lx-card{background:var(--color-panel);border:1px solid var(--color-border-line);border-radius:var(--cds-radius);padding:var(--cds-pad-lg);display:flex;flex-direction:column;gap:var(--cds-gap-sm);min-width:0}
+.lx-note{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);margin:0}
+.lx-chart{position:relative;min-height:220px}
+.lx-tw{overflow:auto;max-height:32rem}
+.lx-t{border-collapse:collapse;width:100%;font-size:var(--cds-font-size-caption)}
+.lx-t th,.lx-t td{padding:6px 8px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--color-border-line)}
+.lx-t th:first-child,.lx-t td:first-child,.lx-t .l{text-align:left}
+.lx-t th{position:sticky;top:0;background:var(--color-panel);color:var(--color-fg-muted);font-weight:var(--cds-font-weight-medium);cursor:pointer;user-select:none}
+.lx-t tr.sub td:first-child{padding-left:20px;color:var(--color-fg-muted)}
+.lx-t tr.grp td{font-weight:var(--cds-font-weight-medium)}
+.lx-t tr.tot td{font-weight:var(--cds-font-weight-medium);border-top:2px solid var(--color-border-line)}
+.lx-t td.camp{text-align:left;max-width:22rem;overflow:hidden;text-overflow:ellipsis}
+.lx-click tbody tr{cursor:pointer}
+.lx-click tbody tr:hover td{background:color-mix(in srgb,var(--lx-acc) 8%,transparent)}
+.lx-bar{display:inline-block;height:6px;border-radius:3px;background:var(--cds-chart-muted);vertical-align:middle;margin-left:6px}
+.lx-flag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:999px;border:1px solid var(--cds-chart-status-critical);color:var(--color-bad);margin-left:6px}
+.lx-tip{position:absolute;pointer-events:none;background:var(--cds-surface-popover);border:1px solid var(--cds-border);border-radius:var(--cds-radius);box-shadow:var(--cds-shadow-popover);padding:var(--cds-pad-xs) var(--cds-pad-sm);font-size:var(--cds-font-size-caption);white-space:nowrap;z-index:4}
+.lx-tip .h{color:var(--cds-text-secondary)}
+.lx-search{font:inherit;font-size:var(--cds-font-size-caption);padding:var(--cds-pad-xs) var(--cds-pad-sm);border:1px solid var(--color-border-line);border-radius:var(--cds-radius);background:var(--color-bg);color:var(--color-fg);max-width:20rem}
+.lx-ins{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:var(--cds-gap-sm);font-size:var(--cds-font-size-body);color:var(--color-fg)}
+.lx-ins li{display:flex;gap:var(--cds-gap-sm);align-items:baseline;max-width:90ch}
+.lx-ins .tag{flex:none;font-size:11px;padding:1px 6px;border-radius:999px;border:1px solid var(--color-border-line);color:var(--color-fg-muted)}
+.lx-ins .cf{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);margin-left:4px}
+.lx-heat td.h{min-width:3.5rem}
+.ins-box{display:flex;flex-direction:column;gap:var(--cds-gap-md)}
+.ins-warn{border:1px solid var(--cds-chart-status-warning, var(--color-border-line));border-left-width:4px;border-radius:var(--cds-radius);padding:var(--cds-pad-sm) var(--cds-pad-md);background:color-mix(in srgb,var(--cds-chart-status-warning, #c90) 7%,var(--color-bg));display:flex;flex-direction:column;gap:4px;font-size:var(--cds-font-size-caption)}
+.ins-warn .ins-h{font-weight:var(--cds-font-weight-medium);font-size:var(--cds-font-size-body)}
+.ins-box details summary{cursor:pointer;list-style-position:inside;font-size:var(--cds-font-size-caption)}
+.ins-t th,.ins-t td{text-align:left;white-space:normal}
+.ins-t td:nth-child(3){min-width:18rem}
+.ins-t td:nth-child(4){min-width:12rem;max-width:18rem}
+.ins-box details p{margin:4px 0 2px;color:var(--color-fg-muted);font-size:var(--cds-font-size-caption);line-height:1.55;max-width:80ch}
+.ins-sum{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,13rem),1fr));gap:var(--cds-gap-sm)}
+.ins-kpi{border:1px solid var(--color-border-line);border-radius:var(--cds-radius);padding:var(--cds-pad-sm) var(--cds-pad-md);display:flex;flex-direction:column;gap:2px;background:var(--color-panel)}
+.ins-kpi .k{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted)}
+.ins-kpi .v{font-size:1.35rem;font-weight:var(--cds-font-weight-medium)}
+.ins-kpi .chg{font-size:var(--cds-font-size-caption)}
+.ins-kpi .c{font-size:var(--cds-font-size-caption);margin-top:4px;line-height:1.45}
+.ins-kpi .c b{font-weight:var(--cds-font-weight-medium)}
+.ins-sec{font-size:var(--cds-font-size-heading);font-weight:var(--cds-font-weight-medium);margin:var(--cds-gap-md) 0 0;padding-top:var(--cds-gap-sm);border-top:1px solid var(--color-border-line)}
+.ins-sec:first-child{border-top:0;margin-top:0;padding-top:0}
+.ins-brk{border:1px solid var(--color-border-line);border-radius:var(--cds-radius);padding:var(--cds-pad-sm) var(--cds-pad-md);display:flex;flex-direction:column;gap:6px}
+.ins-h2{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted)}
+.ins-brow{display:flex;gap:var(--cds-gap-sm);align-items:baseline;flex-wrap:wrap}
+.ins-brow .n{flex:none;width:5.5rem;font-size:var(--cds-font-size-caption);font-weight:var(--cds-font-weight-medium)}
+.ins-brow .v{flex:1;min-width:0}
+.ins-sub{font-size:var(--cds-font-size-body);font-weight:var(--cds-font-weight-medium);margin:var(--cds-gap-xs) 0 0}
+.ins-t td{vertical-align:top}
+.ins-t td.nowrap{white-space:nowrap}
+.ins-t summary{font-weight:var(--cds-font-weight-medium);font-size:var(--cds-font-size-body)}
+.ins-chip{display:inline-block;font-size:12px;padding:1px 7px;border-radius:999px;border:1px solid var(--color-border-line);margin:0 4px 3px 0;white-space:nowrap}
+.ins-act{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);min-width:10rem}
+.ins-more>summary{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted)}
+.ins-more .lx-ins{margin-top:var(--cds-gap-sm)}
+.lx-notes{margin:0;padding-left:1.1rem;font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);display:flex;flex-direction:column;gap:4px}
+[data-dash-source-state=refreshing]{opacity:.5;transition:opacity var(--cds-dur-slow)}
+</style>
+
+<div class="lx">
+  <header class="lx-head" id="top">
+    <h1>링티 데일리 광고 대시보드</h1>
+    <p class="lx-take dash-skeleton" id="takeaway" data-source="cube">—</p>
+  </header>
+
+  <section class="lx-filters" id="filters" aria-label="필터">
+    <div class="lx-period">
+      <label for="f-start">기간 <input id="f-start" type="date" min="2026-01-01" max="2099-12-31"></label>
+      <label for="f-end">~ <input id="f-end" type="date" min="2026-01-01" max="2099-12-31"></label>
+      <div class="lx-quick" id="f-quick">
+        <button class="lx-chip" type="button" id="q-1" data-q="1">어제</button>
+        <button class="lx-chip" type="button" id="q-7" data-q="7">최근 7일</button>
+        <button class="lx-chip" type="button" id="q-14" data-q="14">최근 14일</button>
+        <button class="lx-chip" type="button" id="q-30" data-q="30">최근 30일</button>
+        <button class="lx-chip" type="button" id="q-m" data-q="m">이번 달</button>
+      </div>
+      <label for="f-cmp">비교 <select id="f-cmp"><option value="prev">직전 동기간</option><option value="mom">전월 같은 날짜</option><option value="yoy7">전주 같은 요일</option><option value="yoy">전년 같은 날짜</option></select></label>
+      <button class="lx-btn" id="f-reset" type="button">필터 초기화</button>
+      <span class="lx-note">버튼을 누를 때마다 선택·해제돼요(여러 개 가능). Ctrl(⌘)+클릭은 그것만 선택</span>
+    </div>
+    <div class="lx-slicers" id="f-dims"></div>
+  </section>
+
+  <nav class="lx-tabs" role="tablist" aria-label="보기">
+    <button class="lx-tab" role="tab" id="tab-summary" data-page="summary" aria-selected="true">요약</button>
+    <button class="lx-tab" role="tab" id="tab-product" data-page="product" aria-selected="false">제품별</button>
+    <button class="lx-tab" role="tab" id="tab-sales" data-page="sales" aria-selected="false">실매출</button>
+    <button class="lx-tab" role="tab" id="tab-media" data-page="media" aria-selected="false">매체·유형</button>
+    <button class="lx-tab" role="tab" id="tab-trend" data-page="trend" aria-selected="false">주차·월별</button>
+    <button class="lx-tab" role="tab" id="tab-campaign" data-page="campaign" aria-selected="false">캠페인</button>
+  </nav>
+
+  <div class="lx-page" id="summary">
+    <div class="lx-kpis" id="kpis" data-source="cube sales sprod"></div>
+    <div class="lx-grid">
+      <div class="lx-card" id="card-daily">
+        <h2>일자별 매출액·비용</h2>
+        <p class="lx-note">막대: 매출액(진한색)과 총비용. 매출액은 매체 보고 기준이라 매체 간 중복이 있을 수 있어요.</p>
+        <div class="lx-chart" id="ch-daily" data-source="cube"></div>
+      </div>
+      <div class="lx-card" id="card-roas">
+        <h2>일자별 ROAS</h2>
+        <p class="lx-note">점선은 비교 기간의 평균 ROAS.</p>
+        <div class="lx-chart" id="ch-roas" data-source="cube"></div>
+      </div>
+    </div>
+    <div class="lx-card" id="card-day-sum">
+      <h2>일자별 요약</h2>
+      <p class="lx-note">매출액·ROAS는 매체 보고 기준. 오른쪽 실매출·MER은 공식몰(카페24)과 네이버 스마트스토어 판매금액(실매출 ÷ 광고비)이고, 실매출 데이터가 없는 날은 비워 뒀어요.</p>
+      <div class="lx-tw"><table class="lx-t" id="t-day" data-source="cube sales sprod"></table></div>
+    </div>
+    <div class="lx-card" id="card-media-sum">
+      <h2>매체별 요약</h2>
+      <p class="lx-note" id="media-sum-note">선택 기간 vs 비교 기간. ROAS 비교는 %p 차이, 나머지는 증감률.</p>
+      <div class="lx-tw"><table class="lx-t" id="t-media-sum" data-source="cube"></table></div>
+    </div>
+    <div class="lx-card" id="card-notes">
+      <h2>데이터 주의사항</h2>
+      <ul class="lx-notes">
+        <li>광고 데이터: 데일리 리포트 엑셀 RAW TOTAL (네이버 SA·SSA·파워컨텐츠, 메타, GFA, 구글). 카카오는 RAW TOTAL에 없어 빠져 있어요.</li>
+        <li>BSA(네이버 브랜드검색): 월별 BSA Daily Report의 브랜드별 시트에서 5월부터 합쳤어요. 비용은 계약금을 일할한 값이고, 캠페인유형 BSA·랜딩 '브랜드검색'·디바이스 'PC+모바일'로 넣었어요.</li>
+        <li>5월 BSA 비용은 브랜드별 시트 합계 기준이라 BSA_Total 시트보다 하루 약 13만원 많아요(링티 메인·이너뷰티 등). 어느 쪽이 맞는지 확인이 필요해요.</li>
+        <li>10/1 이후 날짜가 RAW에서 '26년 9월 5주차'로 묶여 있어요. 주차·월별 탭의 주간 추이는 월요일 시작 주로 따로 계산했어요.</li>
+        <li>실매출: 공식몰은 카페24 상품별 일별매출 판매금액(2025-01-01~2026-09-30), 네이버는 스마트스토어 판매금액(순)(2026-04-04~06-02, 08-02~09-30). 채널 슬라이서를 안 고르면 선택 기간을 다 덮는 채널만 합쳐요. MER은 같은 기간·제품 조건의 광고비 전체로 나눈 값이에요.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="lx-page" id="media" hidden>
+    <div class="lx-card" id="card-media">
+      <h2>매체 > 캠페인유형</h2>
+      <p class="lx-note">선택 기간. 오른쪽 세 열은 비교 기간 대비. 노출순위는 네이버 SA(파워링크)·쇼핑검색(SSA)의 평균 노출순위를 노출로 가중평균한 값이에요.</p>
+      <div class="lx-tw"><table class="lx-t" id="t-media" data-source="cube"></table></div>
+    </div>
+    <div class="lx-grid">
+      <div class="lx-card" id="card-owner"><h2>관리 (링티 / 부스터즈)</h2><div class="lx-tw"><table class="lx-t" id="t-owner" data-source="cube"></table></div></div>
+      <div class="lx-card" id="card-landing"><h2>랜딩</h2><div class="lx-tw"><table class="lx-t" id="t-landing" data-source="cube"></table></div></div>
+      <div class="lx-card" id="card-device"><h2>디바이스</h2><div class="lx-tw"><table class="lx-t" id="t-device" data-source="cube"></table></div></div>
+      <div class="lx-card" id="card-goal"><h2>목표</h2><div class="lx-tw"><table class="lx-t" id="t-goal" data-source="cube"></table></div></div>
+    </div>
+  </div>
+
+  <div class="lx-page" id="product" hidden>
+    <div class="lx-card" id="card-product">
+      <h2>브랜드(제품)별 요약</h2>
+      <p class="lx-note" id="product-note">매출액 내림차순. 막대는 매출액 크기. 행을 누르면 그 제품만 골라져요.</p>
+      <div class="lx-tw"><table class="lx-t lx-click" id="t-product" data-source="cube sales sprod"></table></div>
+    </div>
+    <div class="lx-card" id="card-pxm">
+      <h2>제품 × 매체</h2>
+      <p class="lx-note">선택 기간 매체별 매출액과 ROAS. 비용이 없는 칸은 비워 뒀어요.</p>
+      <div class="lx-tw"><table class="lx-t" id="t-pxm" data-source="cube"></table></div>
+    </div>
+    <div class="lx-card" id="card-pday">
+      <h2 id="pday-title">제품 일자별 요약</h2>
+      <p class="lx-note" id="pday-note">제품 슬라이서에서 제품을 하나 고르면 그 제품의 일자별 표가 나와요.</p>
+      <div class="lx-tw"><table class="lx-t" id="t-pday" data-source="cube sales sprod"></table></div>
+    </div>
+  </div>
+
+  <div class="lx-page" id="sales" hidden>
+    <div class="lx-card" id="card-sales-sl">
+      <h2>실매출 슬라이서</h2>
+      <p class="lx-note" id="sales-range-note" data-source="sales">카페24 공식몰 상품별 일별 매출. 위쪽 기간·제품 슬라이서도 같이 적용돼요.</p>
+      <div class="lx-slicers" id="sales-slicers"></div>
+    </div>
+    <div class="lx-kpis" id="sales-kpis" data-source="sales sprod cube"></div>
+    <div class="lx-card" id="card-sales-daily">
+      <h2>일자별 실매출·광고비</h2>
+      <p class="lx-note">막대: 실매출(진한색)과 광고비(총비용). MER = 실매출 ÷ 광고비.</p>
+      <div class="lx-chart" id="ch-sales" data-source="sales cube"></div>
+    </div>
+    <div class="lx-card" id="card-sales-group">
+      <h2>제품군별 실매출 vs 광고</h2>
+      <p class="lx-note">실매출은 공식몰(카페24)·네이버 스마트스토어 판매금액, 광고 매출은 매체 보고 기준이라 서로 다른 숫자예요.</p>
+      <div class="lx-tw"><table class="lx-t lx-click" id="t-sales-group" data-source="sales sprod cube"></table></div>
+    </div>
+    <div class="lx-grid">
+      <div class="lx-card" id="card-sales-box">
+        <h2>제품군 × 박스</h2>
+        <div class="lx-tw"><table class="lx-t" id="t-sales-box" data-source="sales sprod"></table></div>
+      </div>
+      <div class="lx-card" id="card-sales-promo">
+        <h2>프로모션·공구별</h2>
+        <div class="lx-tw"><table class="lx-t" id="t-sales-promo" data-source="sales sprod"></table></div>
+      </div>
+    </div>
+    <div class="lx-card" id="card-promo-mall">
+      <h2>공식몰 프로모션 성과</h2>
+      <p class="lx-note" id="promo-mall-note">MD 제품 행사 예정 내역의 공식몰 행사예요. 행사 이름에 마우스를 올리면 구성·사은품이 나와요. 기간 슬라이서와 관계없이 실매출이 있는 행사를 모두 보여주고, 제품·매체 슬라이서는 적용돼요. 직전 14일 대비는 행사 시작 전 14일 하루 평균과 비교한 값이에요.</p>
+      <div class="lx-tw"><table class="lx-t" id="t-promo-mall" data-source="promo sales sprod cube"></table></div>
+    </div>
+    <div class="lx-card" id="card-promo-gb">
+      <h2>공구별 성과</h2>
+      <p class="lx-note">실매출 상품명에 공구 표시가 있는 링크를 공구 이름별로 묶었어요. 공구 매출은 그 링크의 판매금액, 비중은 같은 기간 공식몰 실매출 대비예요.</p>
+      <div class="lx-tw"><table class="lx-t" id="t-promo-gb" data-source="promo sales sprod"></table></div>
+    </div>
+    <div class="lx-card" id="card-promo-other">
+      <h2>외부 채널 행사와 공식몰 영향</h2>
+      <p class="lx-note">해당 채널 행사 기간의 매체 광고 성과와, 같은 기간 네이버 스마트스토어 실매출(있는 기간만)·공식몰 실매출이 직전 14일보다 어떻게 변했는지예요. 공식몰 행사가 겹치면 표시했어요.</p>
+      <div class="lx-tw"><table class="lx-t" id="t-promo-other" data-source="promo sales sprod cube"></table></div>
+    </div>
+    <div class="lx-card" id="card-sales-items">
+      <h2>상품별 (당일 상품명)</h2>
+      <p class="lx-note">실매출 상위 100개. 판매유형·프로모션명은 그날 상품명 기준으로 붙였어요.</p>
+      <div class="lx-tw"><table class="lx-t" id="t-sales-items" data-source="sales sprod"></table></div>
+    </div>
+  </div>
+
+  <div class="lx-page" id="trend" hidden>
+    <div class="lx-card" id="card-week">
+      <h2>주차별 요약</h2>
+      <p class="lx-note">종료일 기준 최근 12주, 월요일 시작. 기간 필터는 무시하고 나머지 필터는 적용돼요.</p>
+      <div class="lx-chart" id="ch-week" data-source="cube"></div>
+      <div class="lx-tw"><table class="lx-t" id="t-week" data-source="cube"></table></div>
+    </div>
+    <div class="lx-card" id="card-month">
+      <h2>월별 요약 (매체 · 캠페인유형 > 월)</h2>
+      <p class="lx-note" id="month-note">슬라이서에서 고른 월을 모두 보여줘요. 월을 안 고르면 선택 기간이 걸친 월(최소 최근 3개월)이에요. 마지막 달은 종료일까지의 누적이에요.</p>
+      <div class="lx-tw"><table class="lx-t" id="t-month" data-source="cube"></table></div>
+    </div>
+  </div>
+
+  <div class="lx-page" id="campaign" hidden>
+    <div class="lx-card" id="card-campaign">
+      <h2>캠페인 점검</h2>
+      <p class="lx-note" id="camp-note">최근 35일 데이터 안에서 선택 기간을 보여줘요. '전환 0' 표시는 목표가 전환인데 비용 1만원 이상 쓰고 전환이 없는 캠페인이에요.</p>
+      <label class="lx-note" for="camp-q">검색 <input class="lx-search" id="camp-q" type="search" placeholder="캠페인 이름"></label>
+      <div class="lx-tw"><table class="lx-t" id="t-camp" data-source="camp"></table></div>
+    </div>
+  </div>
+
+  <div class="lx-page" id="dow-wrap">
+    <div class="lx-card" id="card-dow-ins">
+      <h2 id="dow-title">요일·주차별 변동과 인사이트</h2>
+      <p class="lx-note" id="dow-note">선택 기간 기준이에요.</p>
+      <div class="ins-box" id="dow-ins" data-source="cube sales sprod promo"></div>
+    </div>
+    <div class="lx-grid">
+      <div class="lx-card" id="card-dow">
+        <h2>요일별 (선택 기간)</h2>
+        <p class="lx-note">하루 평균 비용·매출. ROAS·CVR·CPA는 선택 기간 합계로 계산. 실매출은 공식몰·네이버 중 선택 기간을 덮는 채널, 있는 날짜만.</p>
+        <div class="lx-tw"><table class="lx-t" id="t-dow" data-source="cube sales sprod"></table></div>
+      </div>
+      <div class="lx-card" id="card-wk2">
+        <h2>주차별 변동</h2>
+        <p class="lx-note">선택 기간에 걸친 주(월~일). 전주 대비는 7일을 다 채운 주만 계산해요. 매출·비용은 증감률, ROAS는 %p 차이.</p>
+        <div class="lx-tw"><table class="lx-t" id="t-wk2" data-source="cube sales sprod"></table></div>
+      </div>
+    </div>
+    <div class="lx-card" id="card-heat">
+      <h2>주차 × 요일 ROAS</h2>
+      <p class="lx-note">칸 색은 그 주 전체 ROAS보다 높으면 진하게, 낮으면 빨갛게. 칸에 마우스를 올리면 매출·비용이 나와요.</p>
+      <div class="lx-tw"><table class="lx-t lx-heat" id="t-heat" data-source="cube"></table></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const DIMS = [['media','매체'],['ctype','캠페인유형'],['product','제품'],['owner','관리'],['landing','랜딩'],['goal','목표'],['device','디바이스']];
+  const NUM = ['imp','clk','cost','conv','rev','rkw','rki']; // rkw=노출순위×노출, rki=순위 있는 노출(SA·쇼핑검색)
+  const fmtN = d3.format(',.0f');
+  const fmtP = (v) => (v * 100).toFixed(1) + '%';
+  const fmtP2 = (v) => (v * 100).toFixed(2) + '%'; // CTR·CVR
+  const fmtRk = (v) => (v ? v.toFixed(1) + '위' : '–'); // 평균 노출순위(노출 가중)
+  const fmtR = (v) => d3.format(',.0f')(v * 100) + '%';
+  const compact = (v) => Math.abs(v) >= 1e8 ? (v / 1e8).toFixed(2) + '억' : Math.abs(v) >= 1e4 ? d3.format(',.0f')(v / 1e4) + '만' : fmtN(v);
+  const DAY = 86400000;
+  const iso = (t) => new Date(t).toISOString().slice(0, 10);
+  const parse = (s) => Date.parse(s + 'T00:00:00Z');
+  const wd = '일월화수목금토';
+  const lab = (s) => { const t = new Date(parse(s)); return (t.getUTCMonth() + 1) + '/' + t.getUTCDate() + '(' + wd[t.getUTCDay()] + ')'; };
+
+  const el = (tag, cls, txt) => { const x = document.createElement(tag); if (cls) x.className = cls; if (txt != null) x.textContent = txt; return x; };
+  const cache = new WeakMap();
+  const prep = (rows) => {
+    if (!rows) return [];
+    if (cache.has(rows)) return cache.get(rows);
+    const out = rows.map((r) => { const o = { ...r }; NUM.forEach((k) => { o[k] = Number(r[k]) || 0; }); o.t = parse(r.day); o.year = r.day.slice(2, 4) + '년'; o.month = o.year + ' ' + Number(r.day.slice(5, 7)) + '월'; return o; });
+    cache.set(rows, out);
+    return out;
+  };
+  let salesCache = null;
+  const salesRows = () => {
+    const sd = dash.data('sales'), sp = dash.data('sprod');
+    if (sd.status !== 'ok' || sp.status !== 'ok') return [];
+    if (salesCache && salesCache.a === sd.data && salesCache.b === sp.data) return salesCache.rows;
+    const info = new Map(sp.data.map((r) => [String(r.pid), r]));
+    const rows = sd.data.map((r) => { const p = info.get(String(r.pid)) || {}; return { day: r.day, pid: r.pid, name: p.name || '', group: p.group || '미분류', box: p.box || '', kind: p.kind || '', promo: p.promo || '', channel: p.channel || '공식몰', imp: +r.imp || 0, cart: +r.cart || 0, ord: +r.ord || 0, qty: +r.qty || 0, rev: +r.rev || 0 }; });
+    salesCache = { a: sd.data, b: sp.data, rows }; return rows;
+  };
+  // 판매 채널별 실매출 보유 기간(scov). 채널 슬라이서를 안 고르면, 선택 기간을 다 덮는 채널만 합친다.
+  const scov = () => { const d = dash.data('scov'); return d.status === 'ok' ? d.data : []; };
+  const allCh = () => { const c = [...new Set(scov().map((r) => r.channel))]; return c.length ? c : ['공식몰']; };
+  const chCov = (ch, a, b) => { const l = scov().filter((r) => r.channel === ch); return !l.length || l.some((r) => r.start <= a && r.end >= b); };
+  const covTxt = (ch) => scov().filter((r) => r.channel === ch).map((r) => short(r.start) + '~' + short(r.end)).join(', ');
+  const effCh = () => { const sel = P().schan || []; if (sel.length) return sel; const [s, e] = range(); if (!s) return allCh(); const full = allCh().filter((ch) => chCov(ch, s, e)); return full.length ? full : ['공식몰']; };
+  const chLab = () => effCh().join('+');
+  const chMissing = () => ((P().schan || []).length ? [] : allCh().filter((ch) => !effCh().includes(ch)));
+  let salesECache = null;
+  const salesRowsE = () => { const all = salesRows(); const key = effCh().join('|'); if (salesECache && salesECache.a === all && salesECache.k === key) return salesECache.rows; const ch = new Set(effCh()); const rows = all.filter((r) => ch.has(r.channel)); salesECache = { a: all, k: key, rows }; return rows; };
+  const sagg = (rows) => { const t = { imp: 0, cart: 0, ord: 0, qty: 0, rev: 0, promo: 0, gb: 0 }; rows.forEach((r) => { t.imp += r.imp; t.cart += r.cart; t.ord += r.ord; t.qty += r.qty; t.rev += r.rev; if (r.kind === '프로모션') t.promo += r.rev; if (r.kind === '공구') t.gb += r.rev; }); t.aov = t.ord ? t.rev / t.ord : 0; t.cvr = t.imp ? t.ord / t.imp : 0; return t; };
+  // 실매출: 기간·제품·실매출 슬라이서 적용, 날짜별/제품군별 합. 실매출 범위 밖 날짜는 null.
+  const salesIn = (s, e) => {
+    const sr = salesRowsE(); if (!sr.length) return null; const ech = effCh();
+    const smax = d3.max(sr, (r) => r.day), smin = d3.min(sr, (r) => r.day);
+    const p = P(); const ps = new Set(p.product || []), sb = new Set(p.sbox || []), sk = new Set(p.skind || []), sp = new Set(p.spromo || []);
+    const rows = sr.filter((r) => r.day >= s && r.day <= e && (!ps.size || ps.has(r.group)) && (!sb.size || sb.has(r.box)) && (!sk.size || sk.has(r.kind)) && (!sp.size || sp.has(r.promo)));
+    return { smin, smax, rows, has: (d) => d >= smin && d <= smax && ech.every((ch) => chCov(ch, d, d)),
+      byDay: new Map(d3.rollups(rows, (v) => d3.sum(v, (r) => r.rev), (r) => r.day)),
+      byGroup: new Map(d3.rollups(rows, (v) => d3.sum(v, (r) => r.rev), (r) => r.group)),
+      covers: s >= smin && e <= smax && ech.every((ch) => chCov(ch, s, e)) };
+  };
+  const promoEvents = () => { const d = dash.data('promo'); return d.status === 'ok' ? d.data : []; };
+  const evOn = (a, b, chs) => promoEvents().filter((x) => x.start <= b && x.end >= a && (!chs || chs.includes(x.channel)));
+  const evName = (x) => (x.channel === '기타' || x.name.includes(x.channel) ? x.name : x.channel + ' ' + x.name);
+  // 2026 공휴일(일반 달력 기준)
+  const HOL = { '2026-01-01': '신정', '2026-02-16': '설 연휴', '2026-02-17': '설날', '2026-02-18': '설 연휴', '2026-03-01': '삼일절', '2026-03-02': '삼일절 대체', '2026-05-05': '어린이날', '2026-05-24': '부처님오신날', '2026-05-25': '부처님오신날 대체', '2026-06-03': '지방선거', '2026-06-06': '현충일', '2026-08-15': '광복절', '2026-08-17': '광복절 대체', '2026-09-24': '추석 연휴', '2026-09-25': '추석', '2026-09-26': '추석 연휴', '2026-10-03': '개천절', '2026-10-05': '개천절 대체', '2026-10-09': '한글날', '2026-12-25': '성탄절' };
+  const holIn = (a, b) => { const o = []; for (let t0 = parse(a); t0 <= parse(b); t0 += DAY) { const h = HOL[iso(t0)]; if (h && !o.includes(h)) o.push(h); } return o; };
+  const salesCells = (S, rev, cost, ok) => (S && ok ? [fmtN(rev), cost ? fmtR(rev / cost) : '–'] : ['', '']);
+  const agg = (rows) => {
+    const s = { imp: 0, clk: 0, cost: 0, conv: 0, rev: 0, rkw: 0, rki: 0 };
+    rows.forEach((r) => { NUM.forEach((k) => { s[k] += r[k]; }); });
+    const q = (a, b) => (b ? a / b : 0);
+    return { ...s, ctr: q(s.clk, s.imp), cpm: q(s.cost, s.imp) * 1000, cpc: q(s.cost, s.clk), cvr: q(s.conv, s.clk), roas: q(s.rev, s.cost), cpa: q(s.cost, s.conv), aov: q(s.rev, s.conv), rank: q(s.rkw || 0, s.rki || 0) };
+  };
+  const RATE = new Set(['ctr', 'cvr', 'roas', 'share']);
+  const LOWGOOD = new Set(['cpa', 'cpc', 'cpm']);
+  const NEUTRAL = new Set(['cost', 'imp']);
+  const delta = (k, a, b) => {
+    if (k === 'rank') { if (!a || !b) return { txt: '–', good: 0 }; const x = b - a; return { txt: x === 0 ? '변화 없음' : (x > 0 ? '▲' : '▼') + Math.abs(x).toFixed(1) + '위', good: x === 0 ? 0 : x > 0 ? 1 : -1 }; }
+    if (RATE.has(k)) { const x = (a - b) * 100; return { txt: (x >= 0 ? '▲' : '▼') + Math.abs(x).toFixed(k === 'ctr' || k === 'cvr' ? 2 : 1) + '%p', good: x === 0 ? 0 : x > 0 ? 1 : -1 }; }
+    if (!b) return { txt: '–', good: 0 };
+    const x = a / b - 1; let g = x === 0 ? 0 : x > 0 ? 1 : -1; if (LOWGOOD.has(k)) g = -g; if (NEUTRAL.has(k)) g = 0;
+    return { txt: (x >= 0 ? '▲' : '▼') + Math.abs(x * 100).toFixed(0) + '%', good: g };
+  };
+  const cls = (g) => (g > 0 ? 'up' : g < 0 ? 'dn' : 'nt');
+  const COLS = [['imp','노출',fmtN],['clk','클릭',fmtN],['ctr','CTR',fmtP2],['rank','노출순위',fmtRk],['cpm','CPM',fmtN],['cpc','CPC',fmtN],['cost','총비용',fmtN],['conv','전환',fmtN],['rev','매출액',fmtN],['cvr','CVR',fmtP2],['roas','ROAS',fmtR],['cpa','CPA',fmtN],['aov','AOV',fmtN]];
+
+  // ---------- params ----------
+  let maxDay = null, minDay = null;
+  const P = () => dash.params();
+  const setDefaults = () => {
+    if (!maxDay) return;
+    const p = { start: iso(parse(maxDay) - 6 * DAY), end: maxDay, cmp: 'prev', pyear: [], pmonth: [], pweek: [] };
+    DIMS.forEach(([k]) => { p[k] = []; });
+    dash.setParams(p);
+  };
+  const range = () => {
+    const p = P();
+    let s = p.start || (maxDay ? iso(parse(maxDay) - 6 * DAY) : null), e = p.end || maxDay;
+    if (s && e && s > e) [s, e] = [e, s];
+    return [s, e];
+  };
+  const cmpRange = (s, e) => {
+    const a = parse(s), b = parse(e), n = Math.round((b - a) / DAY) + 1, mode = P().cmp || 'prev';
+    if (mode === 'yoy7') return [iso(a - 7 * DAY), iso(b - 7 * DAY), '전주 같은 요일'];
+    if (mode === 'yoy') { const ly = (t) => { const d = new Date(t); return Date.UTC(d.getUTCFullYear() - 1, d.getUTCMonth(), Math.min(d.getUTCDate(), new Date(Date.UTC(d.getUTCFullYear() - 1, d.getUTCMonth() + 1, 0)).getUTCDate())); }; return [iso(ly(a)), iso(ly(b)), '전년 같은 날짜']; }
+    if (mode === 'mom') {
+      const sh = (t) => { const d = new Date(t); const m = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)); const last = new Date(Date.UTC(m.getUTCFullYear(), m.getUTCMonth() + 1, 0)).getUTCDate(); return Date.UTC(m.getUTCFullYear(), m.getUTCMonth(), Math.min(d.getUTCDate(), last)); };
+      return [iso(sh(a)), iso(sh(b)), '전월 같은 날짜'];
+    }
+    return [iso(a - n * DAY), iso(a - DAY), '직전 ' + n + '일'];
+  };
+  const dimFilter = (rows) => {
+    const p = P();
+    const act = DIMS.filter(([k]) => Array.isArray(p[k]) && p[k].length).map(([k]) => [k, new Set(p[k])]);
+    return act.length ? rows.filter((r) => act.every(([k, set]) => set.has(r[k]))) : rows;
+  };
+  const inRange = (rows, s, e) => rows.filter((r) => r.day >= s && r.day <= e);
+  const short = (s) => s.slice(5).replace('-', '/');
+
+  // ---------- filter controls ----------
+  const fStart = document.getElementById('f-start'), fEnd = document.getElementById('f-end'), fCmp = document.getElementById('f-cmp');
+  const takeDate = (el, key) => el.addEventListener('change', () => { if (el.value && el.validity.valid) dash.setParams({ [key]: el.value }); });
+  takeDate(fStart, 'start'); takeDate(fEnd, 'end');
+  fStart.addEventListener('blur', () => { fStart.value = range()[0] || ''; });
+  fEnd.addEventListener('blur', () => { fEnd.value = range()[1] || ''; });
+  fCmp.addEventListener('change', () => dash.setParams({ cmp: fCmp.value }));
+  document.getElementById('f-reset').addEventListener('click', () => { dash.resetParams(); setDefaults(); });
+  const dimBox = document.getElementById('f-dims');
+  const SALES_SL = [['schan', '판매채널'], ['sbox', '박스'], ['skind', '판매유형'], ['spromo', '프로모션명']];
+  const PK = (k) => k === 'pyear' || k === 'pmonth' || k === 'pweek';
+  const SL = [['pyear', '연도'], ['pmonth', '월'], ['pweek', '주차'], ...DIMS, ...SALES_SL];
+  const isSales = (k) => k[0] === 's' && k !== 'start';
+  const sls = {};
+  const mkChip = (txt) => { const c = el('button', 'lx-chip', txt); c.type = 'button'; c.title = txt; return c; };
+  SL.forEach(([k, name]) => {
+    const box = el('div', 'lx-sl' + (k === 'product' || k === 'spromo' ? ' full' : k === 'pweek' || k === 'sbox' ? ' wide' : '')); box.id = 'sl-' + k;
+    const h = el('div', 'lx-sl-h'); const x = el('button', 'lx-sl-x', '해제'); x.type = 'button'; x.setAttribute('aria-label', name + ' 선택 해제');
+    const all = el('button', 'lx-sl-x', '전체'); all.type = 'button'; all.setAttribute('aria-label', name + ' 전체 선택');
+    const btns = el('span', 'lx-sl-btns'); btns.append(all, x);
+    h.append(el('span', '', name), btns);
+    const body = el('div', 'lx-sl-b'); body.setAttribute('role', 'group'); body.setAttribute('aria-label', name);
+    box.append(h, body); (isSales(k) ? document.getElementById('sales-slicers') : dimBox).append(box); sls[k] = { box, body, x, sig: '' };
+    x.addEventListener('click', () => {
+      if (k === 'pyear') { dash.setParams({ pyear: [], pmonth: [], pweek: [] }); applyQuick(7); }
+      else if (k === 'pmonth' || k === 'pweek') { const ys = P().pyear || []; const sp = periodSpan('pyear', ys); if (sp) dash.setParams({ pmonth: [], pweek: [], start: sp[0], end: sp[1] }); else { dash.setParams({ pmonth: [], pweek: [] }); applyQuick(7); } }
+      else dash.setParams({ [k]: [] });
+    });
+    const applySel = (arr) => {
+      if (k === 'pyear') {
+        const span = periodSpan(k, arr);
+        dash.setParams(span ? { pyear: arr, pmonth: [], pweek: [], start: span[0], end: span[1] } : { pyear: [], pmonth: [], pweek: [] });
+      } else if (k === 'pmonth' || k === 'pweek') {
+        const span = periodSpan(k, arr);
+        // 연도는 월·주차 목록을 좁히는 용도라 그대로 두고, 월·주차를 다 풀면 고른 연도 전체로 돌아간다
+        const ys = span ? null : periodSpan('pyear', P().pyear || []);
+        dash.setParams(span ? { pmonth: k === 'pmonth' ? arr : [], pweek: k === 'pweek' ? arr : [], start: span[0], end: span[1] } : ys ? { pmonth: [], pweek: [], start: ys[0], end: ys[1] } : { pyear: [], pmonth: [], pweek: [] });
+      } else dash.setParams({ [k]: arr });
+    };
+    body.addEventListener('click', (ev) => {
+      const c = ev.target.closest('.lx-chip'); if (!c) return;
+      const v = c.dataset.v; const cur = new Set(P()[k] || []);
+      if (ev.ctrlKey || ev.metaKey) { const only = cur.size === 1 && cur.has(v); cur.clear(); if (!only) cur.add(v); }
+      else cur.has(v) ? cur.delete(v) : cur.add(v);
+      applySel([...cur]);
+    });
+    all.addEventListener('click', () => {
+      const chips = [...body.querySelectorAll('.lx-chip')];
+      const live = chips.filter((c) => !c.classList.contains('empty'));
+      applySel((live.length ? live : chips).map((c) => c.dataset.v));
+    });
+  });
+  let dayIndex = null; // value -> [minDay,maxDay] for month/week
+  const periodSpan = (k, arr) => {
+    if (!arr.length || !dayIndex) return null;
+    const sp = arr.map((v) => dayIndex[k].get(v)).filter(Boolean);
+    return sp.length ? [d3.min(sp, (x) => x[0]), d3.max(sp, (x) => x[1])] : null;
+  };
+  const applyQuick = (q) => {
+    if (!maxDay) return; const e = parse(maxDay); let s;
+    if (q === 'm') s = Date.UTC(new Date(e).getUTCFullYear(), new Date(e).getUTCMonth(), 1);
+    else if (q === '1' || q === 1) { dash.setParams({ start: maxDay, end: maxDay, pyear: [], pmonth: [], pweek: [] }); return; }
+    else s = e - (Number(q) - 1) * DAY;
+    dash.setParams({ start: iso(s), end: maxDay, pyear: [], pmonth: [], pweek: [] });
+  };
+  document.getElementById('f-quick').addEventListener('click', (ev) => { const b = ev.target.closest('[data-q]'); if (b) applyQuick(b.dataset.q); });
+  [fStart, fEnd].forEach((x) => x.addEventListener('change', () => { if (x.value && x.validity.valid) dash.setParams({ pyear: [], pmonth: [], pweek: [] }); }));
+  const drawControls = (rows) => {
+    const p = P(); const [s, e] = range();
+    if (document.activeElement !== fStart) fStart.value = s || '';
+    if (document.activeElement !== fEnd) fEnd.value = e || '';
+    [fStart, fEnd].forEach((x) => { x.min = minDay; x.max = maxDay; });
+    fCmp.value = p.cmp || 'prev';
+    if (!dayIndex || dayIndex.rows !== rows) {
+      dayIndex = { rows, pyear: new Map(), pmonth: new Map(), pweek: new Map() };
+      d3.rollups(rows, (v) => [d3.min(v, (r) => r.day), d3.max(v, (r) => r.day)], (r) => r.year).forEach(([k, v]) => dayIndex.pyear.set(k, v));
+      d3.rollups(rows, (v) => [d3.min(v, (r) => r.day), d3.max(v, (r) => r.day)], (r) => r.month).forEach(([k, v]) => dayIndex.pmonth.set(k, v));
+      d3.rollups(rows, (v) => [d3.min(v, (r) => r.day), d3.max(v, (r) => r.day)], (r) => r.week).forEach(([k, v]) => dayIndex.pweek.set(k, v));
+    }
+    // quick buttons state
+    const n = s && e ? Math.round((parse(e) - parse(s)) / DAY) + 1 : 0; const ms = maxDay ? iso(Date.UTC(new Date(parse(maxDay)).getUTCFullYear(), new Date(parse(maxDay)).getUTCMonth(), 1)) : '';
+    document.querySelectorAll('#f-quick .lx-chip').forEach((b) => { const q = b.dataset.q; const on = !(p.pyear || []).length && !(p.pmonth || []).length && !(p.pweek || []).length && e === maxDay && (q === 'm' ? s === ms : (q === '1' ? s === maxDay : n === Number(q))); b.setAttribute('aria-pressed', String(on)); });
+    const inR = s ? rows.filter((r) => r.day >= s && r.day <= e) : rows;
+    SL.forEach(([k]) => {
+      const sl = sls[k]; const sel = new Set(p[k] || []);
+      let vals;
+      const selY = new Set(p.pyear || []); const inY = (x) => !selY.size || selY.has(x[1][0].slice(2, 4) + '년') || selY.has(x[1][1].slice(2, 4) + '년');
+      if (k === 'pyear') vals = [...dayIndex.pyear.entries()].sort((a, b) => d3.descending(a[1][0], b[1][0])).map((x) => x[0]);
+      else if (k === 'pmonth') vals = [...dayIndex.pmonth.entries()].filter(inY).sort((a, b) => d3.descending(a[1][0], b[1][0])).map((x) => x[0]);
+      else if (k === 'pweek') vals = [...dayIndex.pweek.entries()].filter(inY).sort((a, b) => d3.descending(a[1][0], b[1][0])).slice(0, selY.size ? 60 : 16).map((x) => x[0]);
+      else if (isSales(k)) {
+        const sr = salesRowsE(); const f2 = { sbox: 'box', skind: 'kind', spromo: 'promo' }[k];
+        const src = s ? sr.filter((r) => r.day >= s && r.day <= e) : sr;
+        if (k === 'schan') vals = allCh(); else vals = d3.rollups(src.length ? src : sr, (v) => d3.sum(v, (r) => r.rev), (r) => r[f2]).filter((x) => x[0] !== '').sort((a, b) => b[1] - a[1]).map((x) => x[0]);
+        if (k === 'spromo') vals = vals.slice(0, 40);
+        [...sel].forEach((v) => { if (!vals.includes(v)) vals.push(v); });
+      }
+      else vals = d3.rollups(rows, (v) => d3.sum(v, (r) => r.cost), (r) => r[k]).sort((a, b) => b[1] - a[1]).map((x) => x[0]);
+      // values with data under the other slicers
+      let live = null;
+      if (!PK(k) && !isSales(k)) {
+        const others = DIMS.filter(([d]) => d !== k && (p[d] || []).length).map(([d]) => [d, new Set(p[d])]);
+        live = new Set(); inR.forEach((r) => { if (others.every(([d, st]) => st.has(r[d]))) live.add(r[k]); });
+      }
+      const sig = vals.join('|') + '#' + [...sel].join('|') + '#' + (live ? [...live].sort().join('|') : '');
+      if (sl.sig !== sig) {
+        sl.sig = sig;
+        sl.body.replaceChildren(...vals.map((v, i) => {
+          const c = mkChip(k === 'pweek' ? String(v).replace(new RegExp('^' + (maxDay || '').slice(2, 4) + '년\\s*'), '') : v); c.dataset.v = v; c.id = 'chip-' + k + '-' + i; c.setAttribute('aria-pressed', String(sel.has(v)));
+          if (live && !live.has(v) && !sel.has(v)) c.classList.add('empty');
+          return c;
+        }));
+      }
+      sl.x.disabled = !sel.size;
+    });
+  };
+
+  // ---------- tabs ----------
+  const pages = ['summary', 'product', 'sales', 'media', 'trend', 'campaign'];
+  let cur = 'summary';
+  const show = (id) => {
+    if (!pages.includes(id)) return;
+    cur = id;
+    pages.forEach((p) => { document.getElementById(p).hidden = p !== id; document.getElementById('tab-' + p).setAttribute('aria-selected', String(p === id)); });
+    document.getElementById('dow-wrap').hidden = id === 'campaign';
+    dash.setLink(id); redraw();
+  };
+  document.querySelectorAll('.lx-tab').forEach((b) => b.addEventListener('click', () => show(b.dataset.page)));
+
+  // ---------- helpers: tables ----------
+  const tdN = (txt, c) => el('td', c, txt);
+  const head = (t, names, sortable) => {
+    const tr = el('tr'); names.forEach((n, i) => { const th = el('th', i === 0 ? 'l' : '', n); tr.append(th); });
+    const th = el('thead'); th.append(tr); t.append(th); return tr;
+  };
+  const cmpTable = (t, groups, cur, prev, label, order) => {
+    // groups: array of keys; cur/prev: Map key->agg
+    t.replaceChildren();
+    head(t, [label, '총비용', '비중', '전환', '매출액', 'ROAS', 'CPA', 'CVR', '매출 비교', 'ROAS 비교', '비용 비교']);
+    const tb = el('tbody'); const tot = [...cur.values()].reduce((a, v) => a + v.cost, 0);
+    groups.forEach((g) => {
+      const a = cur.get(g) || agg([]), b = prev.get(g) || agg([]);
+      const tr = el('tr'); tr.append(el('td', 'l', g));
+      [fmtN(a.cost), tot ? fmtP(a.cost / tot) : '–', fmtN(a.conv), fmtN(a.rev), fmtR(a.roas), fmtN(a.cpa), fmtP2(a.cvr)].forEach((v) => tr.append(tdN(v)));
+      [['rev', a.rev, b.rev], ['roas', a.roas, b.roas], ['cost', a.cost, b.cost]].forEach(([k, x, y]) => { const d = b.cost || b.rev ? delta(k, x, y) : { txt: '신규', good: 0 }; tr.append(tdN(d.txt, cls(d.good))); });
+      tb.append(tr);
+    });
+    t.append(tb);
+  };
+  const byKey = (rows, keyFn) => { const m = new Map(); d3.groups(rows, keyFn).forEach(([k, v]) => m.set(k, agg(v))); return m; };
+
+  // ---------- charts ----------
+  const tipFor = (box) => { let tip = box.querySelector('.lx-tip'); if (!tip) { tip = el('div', 'lx-tip'); tip.hidden = true; box.append(tip); } return tip; };
+  const placeTip = (box, tip, x, y) => { const w = box.clientWidth; tip.hidden = false; const tw = tip.offsetWidth; tip.style.left = Math.max(0, Math.min(w - tw, x - tw / 2)) + 'px'; tip.style.top = Math.max(0, y - tip.offsetHeight - 10) + 'px'; };
+  const axisClean = (g) => { g.attr('font-size', null).attr('font-family', null); g.selectAll('text').attr('fill', 'var(--color-fg-muted)').style('font-size', '11px'); g.selectAll('line,path').attr('stroke', 'var(--cds-chart-axis)'); };
+
+  const barChart = (box, days, series, fmtTip) => {
+    box.querySelectorAll('svg').forEach((n) => n.remove());
+    const W = Math.max(280, box.clientWidth), H = 220, m = { t: 8, r: 8, b: 24, l: 8 };
+    const ymax = d3.max(days, (d) => d3.max(series, (s) => d[s.key])) || 1;
+    const y = d3.scaleLinear([0, ymax], [H - m.b, m.t]).nice(4);
+    const svg = d3.select(box).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    const yt = svg.append('g').call(d3.axisLeft(y).ticks(4).tickFormat(compact).tickSize(0)); axisClean(yt); yt.select('.domain').remove();
+    let lw = 0; yt.selectAll('text').each(function () { lw = Math.max(lw, this.getComputedTextLength()); });
+    m.l = lw + 10; yt.attr('transform', `translate(${m.l - 4},0)`);
+    const x = d3.scaleBand(days.map((d) => d.day), [m.l, W - m.r]).padding(0.25);
+    svg.insert('g', ':first-child').selectAll('line').data(y.ticks(4)).join('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y).attr('y2', y).attr('stroke', 'var(--cds-chart-grid)');
+    const xs = d3.scaleBand(series.map((s) => s.key), [0, x.bandwidth()]).padding(0.1);
+    const g = svg.append('g');
+    days.forEach((d) => {
+      series.forEach((s) => {
+        const h = Math.max(0, y(0) - y(d[s.key]));
+        g.append('rect').attr('x', x(d.day) + xs(s.key)).attr('y', y(0) - h).attr('width', Math.min(32, xs.bandwidth())).attr('height', h).attr('rx', 3).attr('fill', s.color);
+      });
+    });
+    const step = Math.ceil(days.length / Math.max(2, Math.floor((W - m.l) / 56)));
+    const xa = svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).tickValues(days.map((d) => d.day).filter((_, i) => i % step === 0)).tickFormat(fmtTip.x).tickSize(0)); axisClean(xa); xa.select('.domain').attr('stroke', 'var(--cds-chart-axis)');
+    const tip = tipFor(box);
+    svg.append('rect').attr('x', m.l).attr('y', 0).attr('width', W - m.l - m.r).attr('height', H - m.b).attr('fill', 'transparent')
+      .on('mousemove', (ev) => {
+        const [px] = d3.pointer(ev); const i = Math.max(0, Math.min(days.length - 1, Math.floor((px - m.l) / x.step()))); const d = days[i];
+        tip.replaceChildren(el('div', 'h', fmtTip.x(d.day)), ...fmtTip.lines(d));
+        const r = box.getBoundingClientRect(), sv = svg.node().getBoundingClientRect();
+        placeTip(box, tip, (x(d.day) + x.bandwidth() / 2) * sv.width / W + (sv.left - r.left), y(d3.max(series, (s) => d[s.key])) * sv.height / H);
+      })
+      .on('mouseleave', () => { tip.hidden = true; });
+  };
+  const swatchLine = (color, name, val) => { const d = el('div'); const sw = el('span'); sw.style.cssText = `display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;background:${color}`; d.append(sw, document.createTextNode(name + ' ' + val)); return d; };
+
+  const lineChart = (box, days, key, ref, fmtY) => {
+    box.querySelectorAll('svg').forEach((n) => n.remove());
+    const W = Math.max(280, box.clientWidth), H = 220, m = { t: 12, r: 28, b: 24, l: 8 };
+    const vmax = Math.max(d3.max(days, (d) => d[key]) || 0, ref || 0) || 1;
+    const y = d3.scaleLinear([0, vmax], [H - m.b, m.t]).nice(4);
+    const svg = d3.select(box).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    const yt = svg.append('g').call(d3.axisLeft(y).ticks(4).tickFormat(fmtY).tickSize(0)); axisClean(yt); yt.select('.domain').remove();
+    let lw = 0; yt.selectAll('text').each(function () { lw = Math.max(lw, this.getComputedTextLength()); });
+    m.l = lw + 10; yt.attr('transform', `translate(${m.l - 4},0)`);
+    const x = d3.scalePoint(days.map((d) => d.day), [m.l + 6, W - m.r]);
+    svg.insert('g', ':first-child').selectAll('line').data(y.ticks(4)).join('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y).attr('y2', y).attr('stroke', 'var(--cds-chart-grid)');
+    if (ref) svg.append('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y(ref)).attr('y2', y(ref)).attr('stroke', 'var(--cds-chart-reference)').attr('stroke-dasharray', '4 4');
+    svg.append('path').datum(days).attr('fill', 'none').attr('stroke', dash.colors[0]).attr('stroke-width', 2).attr('stroke-linejoin', 'round').attr('stroke-linecap', 'round').attr('d', d3.line((d) => x(d.day), (d) => y(d[key])));
+    svg.append('g').selectAll('circle').data(days).join('circle').attr('cx', (d) => x(d.day)).attr('cy', (d) => y(d[key])).attr('r', 2.5).attr('fill', dash.colors[0]);
+    const step = Math.ceil(days.length / Math.max(2, Math.floor((W - m.l) / 56)));
+    const xa = svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).tickValues(days.map((d) => d.day).filter((_, i) => i % step === 0)).tickFormat(lab).tickSize(0)); axisClean(xa); xa.select('.domain').attr('stroke', 'var(--cds-chart-axis)');
+    const tip = tipFor(box); const dot = svg.append('circle').attr('r', 4.5).attr('fill', dash.colors[0]).attr('opacity', 0);
+    svg.append('rect').attr('x', m.l).attr('y', 0).attr('width', W - m.l - m.r).attr('height', H - m.b).attr('fill', 'transparent')
+      .on('mousemove', (ev) => {
+        const [px] = d3.pointer(ev); const i = d3.leastIndex(days, (d) => Math.abs(x(d.day) - px)); const d = days[i];
+        dot.attr('cx', x(d.day)).attr('cy', y(d[key])).attr('opacity', 1);
+        tip.replaceChildren(el('div', 'h', lab(d.day)), el('div', '', 'ROAS ' + fmtY(d[key])), ...(ref ? [el('div', 'h', '비교 기간 평균 ' + fmtY(ref))] : []));
+        const r = box.getBoundingClientRect(), sv = svg.node().getBoundingClientRect();
+        placeTip(box, tip, x(d.day) * sv.width / W + (sv.left - r.left), y(d[key]) * sv.height / H);
+      })
+      .on('mouseleave', () => { tip.hidden = true; dot.attr('opacity', 0); });
+  };
+
+  // ---------- campaign table state ----------
+  document.getElementById('t-sales-group').addEventListener('click', (ev) => { const r = ev.target.closest('tr[data-key]'); if (r) dash.setParams({ product: [r.dataset.key] }); });
+  document.getElementById('t-product').addEventListener('click', (ev) => { const r = ev.target.closest('tr[data-key]'); if (r) dash.setParams({ product: [r.dataset.key] }); });
+  let campSort = { k: 'cost', dir: -1 };
+  const campQ = document.getElementById('camp-q');
+  campQ.addEventListener('input', () => redraw());
+
+  // ---------- draw ----------
+  let last = null;
+  const redraw = () => { if (last) draw(last); };
+  let salesDefaultSet = false;
+  const kpiDefs = [['rev', '매출액'], ['roas', 'ROAS'], ['cost', '총비용'], ['conv', '전환'], ['cpa', 'CPA'], ['aov', 'AOV']];
+
+
+
+  const drawPromo = (f, sr, smin, smax) => {
+    const tm = document.getElementById('t-promo-mall'), to = document.getElementById('t-promo-other'); tm.replaceChildren(); to.replaceChildren();
+    const evs = promoEvents(); if (!evs.length) { tm.append(el('caption', 'lx-note', '프로모션 캘린더를 불러오는 중이에요.')); return; }
+    const ps = new Set(P().product || []); const srf = sr.filter((r) => !ps.size || ps.has(r.group));
+    const pOk = (x) => !ps.size || ps.has(x.main) || (x.products || '').split('·').some((y) => ps.has(y));
+    const sDay = new Map(d3.rollups(srf, (v) => d3.sum(v, (r) => r.rev), (r) => r.day));
+    const sumDays = (a, b) => { let v = 0, n = 0; for (let t0 = parse(a); t0 <= parse(b); t0 += DAY) { const d = iso(t0); if (d < smin || d > smax) continue; v += sDay.get(d) || 0; n++; } return { v, n }; };
+    const preOf = (a) => sumDays(iso(parse(a) - 14 * DAY), iso(parse(a) - DAY));
+    const adIn = (a, b, med) => agg(f.filter((r) => r.day >= a && r.day <= b && (!med || r.media === med)));
+    const nDay = new Map(d3.rollups(salesRows().filter((r) => r.channel === '네이버' && (!ps.size || ps.has(r.group))), (v) => d3.sum(v, (r) => r.rev), (r) => r.day));
+    const nvChg = (a, b) => { const p0 = iso(parse(a) - 14 * DAY), p1 = iso(parse(a) - DAY); if (!chCov('네이버', p0, b)) return null; const n = Math.round((parse(b) - parse(a)) / DAY) + 1; let v = 0, w = 0; for (let t0 = parse(a); t0 <= parse(b); t0 += DAY) v += nDay.get(iso(t0)) || 0; for (let t0 = parse(p0); t0 <= parse(p1); t0 += DAY) w += nDay.get(iso(t0)) || 0; return w ? { cur: v / n, pre: w / 14 } : null; };
+    const mall = evs.filter((x) => x.channel === '공식몰' && x.start <= smax && x.end >= smin && pOk(x)).sort((a, b) => d3.descending(a.start, b.start));
+    head(tm, ['행사', '메인 제품', '기간', '일수', '실매출/일', '직전 14일 대비', '첫 2일 비중', '주력 판매 프로모션명', '광고비/일', 'MER', '광고 ROAS', 'ROAS 직전 대비']);
+    const bm = el('tbody');
+    mall.forEach((x) => {
+      const b = x.end > smax ? smax : x.end; const cur = sumDays(x.start, b); if (!cur.n) return; const pre = preOf(x.start);
+      const f2 = sumDays(x.start, iso(Math.min(parse(x.start) + DAY, parse(b))));
+      const rows = srf.filter((r) => r.day >= x.start && r.day <= b && r.kind !== '일반');
+      const tp = d3.rollups(rows, (v) => d3.sum(v, (r) => r.rev), (r) => r.promo).sort((p, q) => q[1] - p[1])[0];
+      const A = adIn(x.start, b), Bp = adIn(iso(parse(x.start) - 14 * DAY), iso(parse(x.start) - DAY));
+      const tr = el('tr'); const c0 = el('td', 'camp', x.name); c0.title = [x.items && '구성: ' + x.items, x.gift && x.gift, x.note, x.source && '출처: ' + x.source].filter(Boolean).join('\n'); tr.append(c0, el('td', 'l', x.main || ''));
+      tr.append(el('td', 'l', short(x.start) + '~' + short(x.end) + (x.end > smax ? ' *' : '')));
+      const cd = cur.v / cur.n, pd = pre.n ? pre.v / pre.n : 0; const dl = pd ? delta('rev', cd, pd) : { txt: '–', good: 0 };
+      [fmtN(cur.n), fmtN(cd)].forEach((v) => tr.append(tdN(v))); tr.append(tdN(dl.txt, cls(dl.good)));
+      tr.append(tdN(cur.v && cur.n > 2 ? fmtP(f2.v / cur.v) : '–'));
+      tr.append(el('td', 'l', tp ? `${tp[0] || '(이름 없음)'} ${cur.v ? d3.format('.0%')(tp[1] / cur.v) : ''}` : ''));
+      const dr = Bp.cost ? delta('roas', A.roas, Bp.roas) : { txt: '–', good: 0 };
+      [fmtN(A.cost / cur.n), A.cost ? fmtR(cur.v / A.cost) : '–', A.cost ? fmtR(A.roas) : '–'].forEach((v) => tr.append(tdN(v))); tr.append(tdN(dr.txt, cls(dr.good)));
+      bm.append(tr);
+    });
+    tm.append(bm);
+    const tg = document.getElementById('t-promo-gb'); tg.replaceChildren();
+    const gbs = evs.filter((x) => x.channel === '공구' && x.start <= smax && x.end >= smin && pOk(x)).sort((a, b) => d3.descending(a.start, b.start));
+    head(tg, ['공구', '메인 제품', '기간', '일수', '공구 매출', '주문건수', '객단가', '공식몰 실매출 대비']);
+    const bg = el('tbody');
+    gbs.forEach((x) => {
+      const rr = srf.filter((r) => r.promo === x.name && r.day >= x.start && r.day <= x.end); const a = sagg(rr); const tot = sumDays(x.start, x.end);
+      const n = Math.round((parse(x.end) - parse(x.start)) / DAY) + 1;
+      const tr = el('tr'); tr.append(el('td', 'camp', x.name), el('td', 'l', x.main || ''), el('td', 'l', short(x.start) + '~' + short(x.end)));
+      [fmtN(n), fmtN(a.rev), fmtN(a.ord), fmtN(a.aov), tot.v ? fmtP(a.rev / tot.v) : '–'].forEach((v) => tr.append(tdN(v))); bg.append(tr);
+    });
+    tg.append(bg);
+    const oth = evs.filter((x) => pOk(x) && ['네이버', '카카오', '쿠팡', '오픈마켓', '라이브커머스', '홈쇼핑'].includes(x.channel) && x.start <= maxDay && x.end >= minDay && (parse(x.end) - parse(x.start)) >= 2 * DAY).sort((a, b) => d3.descending(a.start, b.start));
+    head(to, ['행사', '채널', '기간', '네이버 광고 매출/일', '직전 14일 대비', '네이버 ROAS', 'ROAS 직전 대비', '네이버 실매출/일', '네이버 실매출 변화', '공식몰 실매출 변화', '공식몰 행사 겹침']);
+    const bo = el('tbody');
+    oth.forEach((x) => {
+      const b = x.end > maxDay ? maxDay : x.end; const n = Math.round((parse(b) - parse(x.start)) / DAY) + 1; if (n <= 0) return;
+      const A = adIn(x.start, b, '네이버'), Bp = adIn(iso(parse(x.start) - 14 * DAY), iso(parse(x.start) - DAY), '네이버');
+      const cur = sumDays(x.start, b), pre = preOf(x.start);
+      const ov = evs.filter((y) => y.channel === '공식몰' && y.start <= b && y.end >= x.start);
+      const tr = el('tr'); const c0 = el('td', 'camp', x.name); c0.title = [x.items && '구성: ' + x.items, x.gift && x.gift, x.note, x.source && '출처: ' + x.source].filter(Boolean).join('\n'); tr.append(c0, el('td', 'l', x.channel), el('td', 'l', short(x.start) + '~' + short(x.end)));
+      const dv = Bp.rev ? delta('rev', A.rev / n, Bp.rev / 14) : { txt: '–', good: 0 }; const dr = Bp.cost ? delta('roas', A.roas, Bp.roas) : { txt: '–', good: 0 };
+      tr.append(tdN(fmtN(A.rev / n)), tdN(dv.txt, cls(dv.good)), tdN(A.cost ? fmtR(A.roas) : '–'), tdN(dr.txt, cls(dr.good)));
+      const nv = nvChg(x.start, b); const nd = nv ? delta('rev', nv.cur, nv.pre) : { txt: '', good: 0 }; tr.append(tdN(nv ? fmtN(nv.cur) : ''), tdN(nd.txt, cls(nd.good)));
+      const ms = cur.n && pre.n ? delta('rev', cur.v / cur.n, pre.v / pre.n) : { txt: '', good: 0 }; tr.append(tdN(ms.txt, cls(ms.good)));
+      tr.append(el('td', 'l', ov.length ? ov.map((y) => y.name).join(', ') : '없음')); bo.append(tr);
+    });
+    to.append(bo);
+  };
+
+  const WDN = ['월', '화', '수', '목', '금', '토', '일'];
+  const wdi = (t) => (new Date(t).getUTCDay() + 6) % 7; // 0=월
+  const mondayOf = (t) => t - wdi(t) * DAY;
+  const conf = (a) => (a.conv >= 30 && a.cost >= 1e6 ? '신뢰도 높음' : a.conv < 10 ? '신뢰도 낮음 · 참고용' : '신뢰도 보통');
+  const pctTxt = (x, y) => (y ? (x >= y ? '+' : '') + d3.format('.0%')(x / y - 1) : '–');
+  const ppTxt = (x, y) => (x >= y ? '+' : '') + d3.format(',.0f')((x - y) * 100) + '%p';
+  const won = (v) => (v >= 0 ? '+' : '-') + compact(Math.abs(v)) + '원';
+  // ---------- 원인 진단: 광고 매출 = 광고비 ÷ CPC × 전환율 × 객단가 로 쪼개고, 가장 크게 움직인 캠페인(또는 매체·제품)을 찾는다 ----------
+  const mkAgg = (s) => { const q = (a, b) => (b ? a / b : 0); return { ...s, ctr: q(s.clk, s.imp), cpm: q(s.cost, s.imp) * 1000, cpc: q(s.cost, s.clk), cvr: q(s.conv, s.clk), roas: q(s.rev, s.cost), cpa: q(s.cost, s.conv), aov: q(s.rev, s.conv), rank: q(s.rkw || 0, s.rki || 0) }; };
+  const scaleAgg = (a, k) => mkAgg({ imp: a.imp * k, clk: a.clk * k, cost: a.cost * k, conv: a.conv * k, rev: a.rev * k });
+  const unitsOf = (ra, rb, key, kb = 1) => {
+    const ma = new Map(d3.rollups(ra, (v) => ({ ...agg(v), landing: v[0].landing }), key)), mb = new Map(d3.rollups(rb, (v) => ({ ...scaleAgg(agg(v), kb), landing: v[0].landing }), key)); const z = agg([]);
+    return [...new Set([...ma.keys(), ...mb.keys()])].map((k) => { const a = ma.get(k) || z, b = mb.get(k) || z; return { k, a, b, landing: a.landing || b.landing || '', dr: a.rev - b.rev, dc: a.cost - b.cost }; });
+  };
+  const pc = (a, b) => (b ? (a >= b ? '+' : '') + d3.format('.0%')(a / b - 1) : '신규');
+  const nC = (x) => d3.format(',.0f')(x) + '건';
+  const pv = (x) => d3.format('.2%')(x);
+  // 반환: { txt, tip, main }. metric은 'rev' 또는 'cost'. salesTot: 같은 날(기간) 공식몰 실매출 합(있으면).
+  const shortU = (k) => (k.length > 30 ? k.slice(0, 29) + '…' : k);
+  const explainAd = (A, B, us, metric, salesTot) => {
+    const out = [], tips = []; let main = null, label = '';
+    if (metric === 'cost') {
+      const u = d3.greatest(us, (x) => Math.abs(x.dc)); const D = A.cost - B.cost; if (!u || !D) return { txt: '', tip: '', main: 'cost', label: '' };
+      const st = u.b.cost < 1 ? '이날 새로 집행이 시작됐어요' : u.a.cost < 1 ? '집행이 멈췄어요(예산 소진·중단 여부 확인)' : `이 캠페인 예산이 ${pc(u.a.cost, u.b.cost)} 바뀌었어요`;
+      out.push(`광고비 변화(${won(D)}) 중 ${won(u.dc)}가 ${u.k}에서 나왔고, ${st}.`);
+      label = `${shortU(u.k)} ` + (u.b.cost < 1 ? '신규 집행' : u.a.cost < 1 ? '집행 중단' : `예산 ${pc(u.a.cost, u.b.cost)}`);
+      if (B.cost && A.cost) { const up = D > 0, better = A.roas >= B.roas * 0.9; out.push(`전체 ROAS는 ${fmtR(B.roas)}→${fmtR(A.roas)}라 ` + (up ? (better ? '늘린 비용이 효율 손실 없이 매출로 이어졌어요.' : '늘린 비용만큼 매출이 따라오지 못했어요.') : (A.roas >= B.roas ? '줄인 비용 대비 매출 손실은 작았어요.' : '비용을 줄이면서 효율도 같이 떨어졌어요.'))); }
+      return { txt: out.join(' '), tip: tips.join(' '), main: 'cost', label };
+    }
+    const tot = A.rev > 0 && B.rev > 0 ? Math.log(A.rev / B.rev) : 0;
+    if (A.cost > 0 && B.cost > 0 && A.clk > 0 && B.clk > 0 && A.conv > 0 && B.conv > 0 && tot) {
+      const L = { cost: Math.log(A.cost / B.cost), cpc: -Math.log(A.cpc / B.cpc), cvr: Math.log(A.cvr / B.cvr), aov: Math.log(A.aov / B.aov) };
+      const m = Object.entries(L).filter(([, v]) => Math.sign(v) === Math.sign(tot)).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]))[0];
+      if (m) {
+        main = m[0];
+        const T = {
+          cost: `광고비가 ${compact(B.cost)}→${compact(A.cost)}원(${pc(A.cost, B.cost)})으로 바뀐 영향이 가장 커요. ` + (B.roas && Math.abs(A.roas / B.roas - 1) >= 0.15 ? `효율도 ROAS ${fmtR(B.roas)}→${fmtR(A.roas)}로 ${A.roas > B.roas ? '좋아졌지만' : '나빠졌지만'} 더 큰 건 집행량이에요` : `효율(ROAS ${fmtR(B.roas)}→${fmtR(A.roas)})은 비슷해서 집행량 문제예요`),
+          cpc: `CPC가 ${fmtN(B.cpc)}→${fmtN(A.cpc)}원으로 ${A.cpc < B.cpc ? '내려 같은 비용에 클릭이 늘어난' : '올라 같은 비용에 클릭이 줄어든'} 게 가장 커요`,
+          cvr: `클릭은 ${pc(A.clk, B.clk)}인데 전환율이 ${pv(B.cvr)}→${pv(A.cvr)}로 바뀌어 전환이 ${nC(B.conv)}→${nC(A.conv)}이 된 게 가장 커요`,
+          aov: `전환은 ${nC(B.conv)}→${nC(A.conv)}인데 건당 매출(객단가)이 ${compact(B.aov)}→${compact(A.aov)}원으로 바뀐 게 가장 커요`,
+        };
+        out.push('쪼개 보면 ' + T[main] + '.');
+        label = { cost: `광고비 ${pc(A.cost, B.cost)}`, cpc: `CPC ${fmtN(B.cpc)}→${fmtN(A.cpc)}원`, cvr: `전환율 ${pv(B.cvr)}→${pv(A.cvr)}`, aov: `객단가 ${compact(B.aov)}→${compact(A.aov)}원` }[main];
+      }
+    }
+    const D = A.rev - B.rev; const u = d3.greatest(us, (x) => Math.abs(x.dr));
+    if (u && D && Math.abs(u.dr) >= 0.25 * Math.abs(D)) {
+      out.push(`${won(u.dr)}가 ${u.k}에서 나왔어요(매출 ${compact(u.b.rev)}→${compact(u.a.rev)}원, 전환 ${nC(u.b.conv)}→${nC(u.a.conv)}, 비용 ${compact(u.b.cost)}→${compact(u.a.cost)}원).`);
+      const hi = Math.max(u.a.rev, u.b.rev), lo = Math.max(1, Math.min(u.a.rev, u.b.rev));
+      const store = u.landing === '네이버' || /스토어/.test(u.k);
+      if (Math.abs(u.a.conv - u.b.conv) < 2 && hi >= 5 * lo && hi >= 5e6) {
+        out.push(`전환 수는 거의 같은데 매출만 ${(hi / lo).toFixed(0)}배 차이라, 실제 주문이라기보다 전환값 집계 이상(중복·잘못된 값)일 가능성이 커요.` + (salesTot && !store && hi > salesTot ? ` 그날 실매출 전체(${compact(salesTot)}원)보다도 커요.` : ''));
+        tips.push('이 날짜는 ROAS 판단에서 빼고, 매체의 전환값 설정을 확인해 보세요.'); label = `${shortU(u.k)} 전환값 집계 오류 의심`;
+      } else if (Math.max(u.a.conv, u.b.conv) <= 25 && u.a.aov && u.b.aov && (u.a.aov / u.b.aov >= 2 || u.a.aov / u.b.aov <= 0.5)) {
+        out.push(`전환이 하루 ${nC(Math.max(u.a.conv, u.b.conv))} 이하라 고액 주문 몇 건에 매출이 크게 흔들려요(건당 ${compact(u.b.aov)}→${compact(u.a.aov)}원).` + (store ? (effCh().includes('네이버') ? ' 스마트스토어로 가는 캠페인이라 실매출 중 네이버 쪽 변화와 같이 보세요.' : ' 스마트스토어로 가는 캠페인이라 공식몰 실매출에는 안 잡혀요.') : ''));
+        tips.push('이 캠페인은 하루 단위보다 주 단위 ROAS로 판단하세요.'); label = `${shortU(u.k)} 고액 주문 몇 건(건당 ${compact(u.b.aov)}→${compact(u.a.aov)}원)`;
+      } else if (u.b.cost < 1 && u.a.cost > 0) { out.push('이 캠페인이 이날 새로 집행되기 시작했어요.'); label = `${shortU(u.k)} 신규 집행`; }
+      else if (u.a.cost < 1 && u.b.cost > 0) { out.push('이 캠페인 집행이 멈췄어요.'); tips.push('예산 소진이나 중단 여부를 확인해 보세요.'); label = `${shortU(u.k)} 집행 중단`; }
+      else if (u.b.cost && Math.abs(u.a.cost / u.b.cost - 1) >= 0.5) { out.push(`이 캠페인 예산이 ${pc(u.a.cost, u.b.cost)} 바뀐 게 직접 원인이에요.`); label = `${shortU(u.k)} 예산 ${pc(u.a.cost, u.b.cost)}`; }
+      else if (u.a.clk && u.b.clk && u.a.conv + u.b.conv >= 10) out.push((u.b.cost && Math.abs(u.a.cost / u.b.cost - 1) < 0.2 ? '비용은 비슷한데 ' : `비용 ${pc(u.a.cost, u.b.cost)}에 더해 `) + `이 캠페인 전환율이 ${pv(u.b.cvr)}→${pv(u.a.cvr)}로 바뀌었어요.`), (label = `${shortU(u.k)} 전환율 ${pv(u.b.cvr)}→${pv(u.a.cvr)}`);
+    }
+    return { txt: out.join(' '), tip: tips.join(' '), main, label };
+  };
+  // 실매출 변화 원인: 주문 수 vs 객단가, 일반/프로모션/공구 구성, 같은 기간 광고비
+  const explainSales = (ra, rb, adA, adB, kb = 1) => {
+    const a = sagg(ra), b0 = sagg(rb); const b = { rev: b0.rev * kb, ord: b0.ord * kb }; b.aov = b.ord ? b.rev / b.ord : 0;
+    const D = a.rev - b.rev; if (!D) return { txt: '', label: '' };
+    const parts = []; let label = '';
+    if (a.ord && b.ord && a.aov && b.aov) { const lo = Math.log(a.ord / b.ord), la = Math.log(a.aov / b.aov); parts.push(Math.abs(lo) >= Math.abs(la) ? `주문 수가 ${fmtN(b.ord)}→${fmtN(a.ord)}건으로 바뀐 게 주요인이에요(객단가 ${compact(b.aov)}→${compact(a.aov)}원)` : `주문 수(${fmtN(b.ord)}→${fmtN(a.ord)}건)보다 객단가(${compact(b.aov)}→${compact(a.aov)}원) 변화가 더 커요. 대량 구매나 고가 세트 판매 영향이에요`); }
+    const kind = (rows, k) => new Map(d3.rollups(rows, (v) => d3.sum(v, (r) => r.rev) * k, (r) => (r.kind === '일반' ? '일반 상품' : r.kind === '공구' ? '공구' : '프로모션 상품')));
+    const ka = kind(ra, 1), kbm = kind(rb, kb);
+    const dk = [...new Set([...ka.keys(), ...kbm.keys()])].map((k) => [k, (ka.get(k) || 0) - (kbm.get(k) || 0)]).filter((x) => Math.abs(x[1]) >= 0.15 * Math.abs(D)).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]));
+    const pr = (rows, k) => new Map(d3.rollups(rows.filter((r) => r.kind !== '일반'), (v) => d3.sum(v, (r) => r.rev) * k, (r) => r.promo || '(이름 없음)'));
+    const pa = pr(ra, 1), pbm = pr(rb, kb); const pl = [...new Set([...pa.keys(), ...pbm.keys()])].map((k) => [k, (pa.get(k) || 0) - (pbm.get(k) || 0)]);
+    const tp = pl.filter((x) => Math.sign(x[1]) === Math.sign(D)).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]))[0];
+    const op = pl.filter((x) => Math.sign(x[1]) === -Math.sign(D)).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]))[0];
+    const pnm = (x) => x[0] + ((pa.get(x[0]) || 0) < 1 ? ' 종료' : (pbm.get(x[0]) || 0) < 1 ? ' 신규' : '');
+    const dk1 = dk.find((x) => Math.sign(x[1]) === Math.sign(D));
+    const multi = new Set([...ra, ...rb].map((r) => r.channel)).size > 1;
+    const pn = (rows, k) => new Map(d3.rollups(rows, (v) => d3.sum(v, (r) => r.rev) * k, (r) => (multi ? r.channel + ' ' : '') + r.name));
+    const qa = pn(ra, 1), qb = pn(rb, kb); const tq = [...new Set([...qa.keys(), ...qb.keys()])].map((k) => [k, (qa.get(k) || 0) - (qb.get(k) || 0)]).filter((x) => Math.sign(x[1]) === Math.sign(D)).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]))[0];
+    const qn = (k) => (k.length > 34 ? k.slice(0, 33) + '…' : k);
+    label = tp && Math.abs(tp[1]) >= 0.25 * Math.abs(D) ? `${pnm(tp)} ${won(tp[1])}` + (op && Math.abs(op[1]) >= 0.3 * Math.abs(D) ? `, ${pnm(op)} ${won(op[1])}으로 일부 상쇄` : '') : tq && Math.abs(tq[1]) >= 0.25 * Math.abs(D) ? `${qn(tq[0])} ${won(tq[1])}` : dk1 ? `${dk1[0]} ${won(dk1[1])}` : `주문 ${pc(a.ord, b.ord)}`;
+    if (multi) { const cm = (rows, k) => new Map(d3.rollups(rows, (v) => d3.sum(v, (r) => r.rev) * k, (r) => r.channel)); const ca = cm(ra, 1), cbm = cm(rb, kb);
+      const cl = [...new Set([...ca.keys(), ...cbm.keys()])].map((k) => [k, (ca.get(k) || 0) - (cbm.get(k) || 0)]).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]));
+      if (cl.length && Math.abs(cl[0][1]) >= 0.5 * Math.abs(D)) label = `${cl[0][0]} ${won(cl[0][1])}` + (label ? ' · ' + label : '');
+      parts.unshift('채널별로는 ' + cl.map(([k, v]) => `${k} ${won(v)}`).join(', ')); }
+    if (tq && Math.abs(tq[1]) >= 0.2 * Math.abs(D)) parts.push(`상품으로는 ${tq[0]} ${won(tq[1])}가 가장 컸어요`);
+    if (dk.length) parts.push('구성별로는 ' + dk.map(([k, v]) => `${k} ${won(v)}`).join(', ') + (tp && Math.abs(tp[1]) >= 0.2 * Math.abs(D) ? ` (가장 큰 건 ${pnm(tp)} ${won(tp[1])})` : ''));
+    if (adA && adB && adB.cost) { const r = adA.cost / adB.cost - 1; parts.push(Math.abs(r) < 0.2 ? `같은 때 광고비는 ${pc(adA.cost, adB.cost)}로 거의 그대로라, 광고보다 상품·행사 쪽 요인으로 보여요` : `같은 때 광고비도 ${pc(adA.cost, adB.cost)} 바뀌어 광고 영향도 섞여 있어요(MER ${fmtR(b.rev / adB.cost)}→${fmtR(a.rev / adA.cost)})`); }
+    if (adA && adB && adB.cost && Math.abs(adA.cost / adB.cost - 1) < 0.2) label += ' (광고비 그대로)';
+    return { txt: parts.join('. ') + '.', label };
+  };
+  const drawDow = (f, s, e, cs, ce, cname) => {
+    const endT = parse(e); const w0 = parse(s); const s8 = s;
+    const rows = f.filter((r) => r.day >= s && r.day <= e), prevRows = f.filter((r) => r.day >= cs && r.day <= ce);
+    // 집계 이상값(전환 몇 건에 수천만 원 이상)은 원인 분석에서만 뺀다. 표 숫자는 원본 그대로.
+    const bKey = (r) => r.day + '|' + r.media + '|' + r.product;
+    const badG = d3.rollups(f, (v) => agg(v), bKey).filter(([, a]) => a.rev >= 3e6 && a.rev / Math.max(a.conv, 1) >= 5e6);
+    const badK = new Set(badG.map((x) => x[0]));
+    const fc = badK.size ? f.filter((r) => !badK.has(bKey(r))) : f;
+    const rowsC = fc.filter((r) => r.day >= s && r.day <= e), prevC = fc.filter((r) => r.day >= cs && r.day <= ce);
+    const nDays = Math.round((endT - w0) / DAY) + 1;
+    const ul = document.getElementById('dow-ins'); ul.replaceChildren();
+    const tD = document.getElementById('t-dow'), tW = document.getElementById('t-wk2'), tH = document.getElementById('t-heat');
+    [tD, tW, tH].forEach((x) => x.replaceChildren());
+    document.getElementById('dow-note').textContent = `선택 기간 ${short(s)}~${short(e)} (${nDays}일) 기준, 비교는 ${cname}(${short(cs)}~${short(ce)}). 위쪽 슬라이서가 모두 적용돼요. 인사이트는 데이터로 자동 계산한 것이라 원인은 추정이에요.`;
+    document.getElementById('dow-title').textContent = '요일·주차별 변동과 인사이트 · ' + ((P().product || []).join('·') || '전체 제품');
+    if (!rows.length) { ul.append(el('p', 'lx-note', '선택한 기간·조건에 데이터가 없어요.')); return; }
+    const SS = salesIn(s8, e);
+    const selP = P().product || []; const pLab = selP.length ? selP.join('·') : '';
+    document.getElementById('dow-title').textContent = '요일·주차별 변동과 인사이트 · ' + (pLab || '전체 제품');
+    const sLab = (pLab ? pLab + ' ' : '') + chLab() + ' 실매출';
+    const evP = (list) => (selP.length ? list.filter((x) => selP.includes(x.main) || (x.products || '').split('·').some((y) => selP.includes(y))) : list);
+    const BX = { warn: [], sum: [], ssum: [], sbrk: [], srows: [], rows: [], more: [] };
+    const ins = (tag, txt, cf) => BX.more.push({ tag, txt, cf });
+    const sg = (v) => (v > 0 ? 1 : v < 0 ? -1 : 0);
+    const campD = dash.data('camp'); const campR = campD.status === 'ok' ? dimFilter(prep(campD.data)).filter((r) => !badK.has(bKey(r))) : []; const cMin = campR.length ? d3.min(campR, (r) => r.day) : '9999';
+    const uKey = (r) => r.media + ' ' + r.product + (r.landing === '네이버' ? '(스토어)' : '');
+    const cKey = (r) => r.media + ' ' + r.campaign;
+    const srcRange = (a0, a1, b0, b1) => { const c = b0 >= cMin; const S = c ? campR : fc; return { ra: S.filter((r) => r.day >= a0 && r.day <= a1), rb: S.filter((r) => r.day >= b0 && r.day <= b1), key: c ? cKey : uKey }; };
+    // 매체별 전환 집계 기준 변경 감지: 전환 수는 크게 바뀌었는데 매출은 그만큼 안 바뀜
+    const flagged = new Map();
+    const shiftDay = (m, a0, a1) => { const ds = d3.rollups(fc.filter((r) => r.media === m && r.day >= a0 && r.day <= a1), agg, (r) => r.day).sort((x, y) => d3.ascending(x[0], y[0])).filter(([, x]) => x.clk >= 30 && x.conv > 0); let best = null;
+      const md = (a, b, k) => d3.median(ds.slice(a, b), (x) => x[1][k]); const rpc = (x) => x[1].rev / x[1].clk;
+      for (let i = 14; i <= ds.length - 14; i++) { const pre = md(i - 14, i, 'cvr'), post = md(i, i + 14, 'cvr'); const sc = Math.abs(Math.log(post / pre)); if (!best || sc > best.sc) best = { sc, i, pre, post }; }
+      if (!best || best.sc <= Math.log(3)) return null;
+      // 클릭당 매출은 그대로여야 집계 기준 변경으로 본다(실제 성과 하락이면 매출도 같이 빠짐)
+      const rr = d3.median(ds.slice(best.i, best.i + 14), rpc) / d3.median(ds.slice(best.i - 14, best.i), rpc); if (!(rr > 0.5 && rr < 2)) return null;
+      let bi = best.i, bs = 0; for (let i = Math.max(3, best.i - 10); i <= Math.min(ds.length - 3, best.i + 10); i++) { const a = d3.mean(ds.slice(i - 3, i), (x) => x[1].cvr), b = d3.mean(ds.slice(i, i + 3), (x) => x[1].cvr); const sc = Math.abs(Math.log(b / a)); if (sc > bs) { bs = sc; bi = i; } }
+      return { ...best, d: ds[bi][0] }; };
+    // 기간·비교·평소 비교 구간 전체에서 매체별 전환 기준 변경일을 한 번 찾는다
+    const winS = iso(Math.min(parse(cs), w0 - 56 * DAY));
+    const shifts = new Map(); [...new Set(fc.map((r) => r.media))].forEach((m) => { const x = shiftDay(m, iso(parse(winS) - 14 * DAY), e); if (x && x.d > winS) shifts.set(m, x); });
+    const convShift = (ra, rb, kb) => { const ma = new Map(d3.rollups(ra, agg, (r) => r.media)), mb = new Map(d3.rollups(rb, (v) => scaleAgg(agg(v), kb), (r) => r.media)); const o = [];
+      ma.forEach((a, m) => { const b = mb.get(m); if (!b || a.conv < 20 || b.conv < 20 || !a.rev || !b.rev) return; const lc = Math.abs(Math.log(a.conv / b.conv)), lr = Math.abs(Math.log(a.rev / b.rev)), lv = Math.abs(Math.log(a.cvr / b.cvr)); if (lc - lr >= Math.log(3) && lv >= Math.log(3)) o.push({ m, a, b }); }); return o; };
+    // ra/rb 원인 분해. 전환 기준이 바뀐 매체는 분해에서 빼고 따로 알린다.
+    const diagRows = (ra, rb, kb, key, metric, salesTot, A0, B0) => {
+      const rb0 = d3.min(rb, (r) => r.day), ra1 = d3.max(ra, (r) => r.day); const ms = new Set(convShift(ra, rb, kb).map((x) => x.m));
+      shifts.forEach((x, m) => { if (rb0 < x.d && x.d <= ra1) { ms.add(m); flagged.set(m, x); } });
+      const ex0 = ms.size ? ms : null; const ra2 = ex0 ? ra.filter((r) => !ex0.has(r.media)) : ra, rb2 = ex0 ? rb.filter((r) => !ex0.has(r.media)) : rb;
+      const A = ex0 || !A0 ? agg(ra2) : A0, B = ex0 || !B0 ? scaleAgg(agg(rb2), kb) : B0;
+      const ex = explainAd(A, B, unitsOf(ra2, rb2, key, kb), metric, salesTot);
+      if (ex0 && ex.txt) ex.txt = `전환 기준이 바뀐 매체(${[...ex0].join('·')})를 빼고 ` + ex.txt;
+      return ex;
+    };
+    const EVCH = ['공식몰', '공구', '네이버', '카카오', '홈쇼핑', '쿠팡', '라이브커머스', '오픈마켓'];
+    // d0~d1 구간 앞뒤로 시작·종료·진행 중인 행사와 공휴일
+    const ctxOf = (d0, d1) => {
+      const pd = iso(parse(d0) - DAY); const es = evP(promoEvents()).filter((y) => EVCH.includes(y.channel));
+      return { st: es.filter((y) => y.start >= pd && y.start <= (d1 < iso(parse(d0) + 2 * DAY) ? d1 : iso(parse(d0) + 2 * DAY))), en: es.filter((y) => y.end >= iso(parse(pd) - DAY) && y.end < d1 && y.end < d0),
+        ong: es.filter((y) => ['공식몰', '공구'].includes(y.channel) && y.start < pd && y.end >= d1), hol: holIn(d0, d1), holB: holIn(pd, pd) };
+    };
+    const nmE = (l) => l.slice(0, 2).map(evName).join(', ') + (l.length > 2 ? ` 외 ${l.length - 2}건` : '');
+    const linkLab = (up, c, main) => {
+      if (main === 'cost') return c.hol.length && !up ? c.hol.join('·') : c.st.length ? evName(c.st[0]) + ' 시작' : '';
+      if (up && c.st.length) return evName(c.st[0]) + ' 시작'; if (!up && c.hol.length) return c.hol.join('·'); if (!up && c.en.length) return evName(c.en[0]) + ' 종료'; if (up && c.holB.length) return '연휴 다음 날'; return '';
+    };
+    const link = (up, c, main) => {
+      const what = { cvr: '전환율을', aov: '객단가를', cpc: 'CPC를', sales: '실매출을' }[main] || '매출을';
+      if (main === 'cost') return c.hol.length && !up ? `${c.hol.join('·')} 기간이라 예산을 줄인 걸로 보여요.` : c.st.length ? `${nmE(c.st)} 시작에 맞춰 예산을 ${up ? '늘린' : '줄인'} 걸로 보여요.` : '';
+      if (up && c.st.length) return main === 'cpc' ? `${nmE(c.st)} 시작과 날짜가 맞물려, 행사로 클릭 반응이 좋아진 걸로 보여요.` : `${nmE(c.st)} 시작과 날짜가 맞물려, 행사가 ${what} 끌어올린 걸로 보여요.`;
+      if (!up && c.hol.length) return `${c.hol.join('·')} 기간이라 구매 수요 자체가 줄어든 영향이 커 보여요.`;
+      if (!up && c.en.length) return `${nmE(c.en)} 종료 직후라 행사 효과가 빠진 걸로 보여요.`;
+      if (up && c.holB.length) return `${c.holB.join('·')} 다음 날이라 수요가 돌아온 영향이에요.`;
+      if (!up && c.st.length) return `${nmE(c.st)}가 시작됐는데도 줄었어요. 행사 대상이 아닌 쪽 감소인지 확인해 보세요.`;
+      if (c.ong.length) return `${nmE(c.ong)} 진행 중이었지만 이때 시작·종료된 행사는 없어서, 행사보다는 위 캠페인 변화가 원인으로 보여요.`;
+      return '';
+    };
+
+    // 주차
+    const weeks = d3.rollups(rows, (v) => ({ ...agg(v), n: new Set(v.map((r) => r.day)).size, rows: v }), (r) => mondayOf(r.t)).sort((a, b) => a[0] - b[0]).map(([w, v]) => ({ w, ...v }));
+    const wl = (w) => short(iso(Math.max(w, w0))) + '~' + short(iso(Math.min(w + 6 * DAY, endT)));
+    const prevWeek = (w) => agg(f.filter((r) => r.t >= w - 7 * DAY && r.t < w));
+    const salesW = (w, n) => { if (!SS) return null; const ds = []; for (let i = 0; i < n; i++) ds.push(iso(w + i * DAY)); const ok = ds.filter((d) => SS.has(d)); return ok.length === n ? d3.sum(ok, (d) => SS.byDay.get(d) || 0) : null; };
+    head(tW, ['주 (월~일)', '총비용', '매출액', 'ROAS', '전환', 'CPA', '매출 전주비', '비용 전주비', 'ROAS 전주비', '실매출', 'MER']);
+    const bw = el('tbody');
+    weeks.forEach((x, i) => {
+      const p = weeks[i - 1] && weeks[i - 1].n === 7 ? weeks[i - 1] : prevWeek(x.w); const tr = el('tr'); tr.append(el('td', 'l', wl(x.w) + (x.n < 7 ? ` (${x.n}일)` : '')));
+      [fmtN(x.cost), fmtN(x.rev), fmtR(x.roas), fmtN(x.conv), fmtN(x.cpa)].forEach((v) => tr.append(tdN(v)));
+      if (x.n === 7 && p.cost) [['rev', x.rev, p.rev], ['cost', x.cost, p.cost], ['roas', x.roas, p.roas]].forEach(([k, a, b]) => { const d = delta(k, a, b); tr.append(tdN(d.txt, cls(d.good))); });
+      else ['–', '–', '–'].forEach((v) => tr.append(tdN(v)));
+      const sv = salesW(x.w, x.n); tr.append(tdN(sv == null ? '' : fmtN(sv)), tdN(sv == null || !x.cost ? '' : fmtR(sv / x.cost))); bw.append(tr);
+    });
+    tW.append(bw);
+
+    const A = agg(rows), B = agg(prevRows);
+    const kAd = { k: '광고 매출', v: compact(A.rev) + '원', chg: B.rev ? `${cname} 대비 ${pctTxt(A.rev, B.rev)}` : '', good: sg(A.rev - B.rev), txt: `광고비 ${compact(A.cost)}원(${pctTxt(A.cost, B.cost)}), ROAS ${fmtR(A.roas)}(${ppTxt(A.roas, B.roas)}), 전환 ${fmtN(A.conv)}건. ${conf(A)}.` };
+    BX.sum.push(kAd, { k: '광고비', v: compact(A.cost) + '원', chg: B.cost ? `${pctTxt(A.cost, B.cost)}` : '', good: 0 }, { k: 'ROAS', v: fmtR(A.roas), chg: B.cost ? ppTxt(A.roas, B.roas) : '', good: sg(A.roas - B.roas) });
+    const contrib = (key) => { const ma = new Map(d3.rollups(rows, (v) => d3.sum(v, (r) => r.rev), (r) => r[key])), mb = new Map(d3.rollups(prevRows, (v) => d3.sum(v, (r) => r.rev), (r) => r[key])); return [...new Set([...ma.keys(), ...mb.keys()])].map((k) => [k, (ma.get(k) || 0) - (mb.get(k) || 0)]).sort((x, y) => y[1] - x[1]); };
+    const pk2 = selP.length === 1 ? 'media' : 'product';
+    const pa = d3.rollups(rows, agg, (r) => r[pk2]).sort((x, y) => y[1].rev - x[1].rev).slice(0, 3); const pb = new Map(d3.rollups(prevRows, agg, (r) => r[pk2]));
+    if (pa.length && A.rev) ins(pk2 === 'media' ? '매체' : '제품', (pk2 === 'media' ? `${pLab} 매체별: ` : '주요 제품: ') + pa.map(([k, x]) => { const y = pb.get(k); return `${k} ${compact(x.rev)}원(${d3.format('.0%')(x.rev / A.rev)}, ${y ? pctTxt(x.rev, y.rev) : '신규'}, ROAS ${fmtR(x.roas)}${y && y.cost ? ' ' + ppTxt(x.roas, y.roas) : ''})`; }).join(' / ') + '.', conf(pa[0][1]));
+    if (B.rev && A.rev) { const sr0 = srcRange(s, e, cs, ce); const ex = diagRows(sr0.ra, sr0.rb, 1, sr0.key, 'rev', null); const hC = holIn(cs, ce), hA = holIn(s, e); const hb = hC.length && !hA.length && A.rev > B.rev ? ` 비교 기간(${short(cs)}~${short(ce)})에 ${hC.join('·')}가 있어 기준 자체가 낮았던 영향도 있어요.` : hA.length && !hC.length && A.rev < B.rev ? ` 선택 기간에 ${hA.join('·')}가 있어 수요가 줄어든 영향도 있어요.` : '';
+      if (ex.txt) { kAd.cause = ex.label; kAd.txt = ex.txt + hb + (ex.tip ? ' → ' + ex.tip : '') + ' ' + kAd.txt; } }
+    const wev = evP(evOn(s, e, ['공식몰', '네이버', '카카오', '쿠팡', '오픈마켓', '라이브커머스', '홈쇼핑']));
+    if (wev.length) ins('행사', `선택 기간 ${pLab ? pLab + ' 관련 ' : ''}행사: ${wev.slice(0, 8).map((x) => evName(x) + ` (${short(x.start)}~${short(x.end)}${x.main ? ', 메인 ' + x.main : ''})`).join(', ')}${wev.length > 8 ? ` 외 ${wev.length - 8}건` : ''}.`);
+    const gev = evP(evOn(s, e, ['공구']));
+    if (gev.length) ins('공구', `선택 기간 공식몰 공구 ${gev.length}건: ${gev.slice(0, 5).map((x) => `${x.name}(${short(x.start)}~${short(x.end)}, ${x.main})`).join(', ')}${gev.length > 5 ? ` 외 ${gev.length - 5}건` : ''}.`);
+    const hlP = holIn(s, e); if (hlP.length) ins('공휴일', `선택 기간에 공휴일이 있어요: ${hlP.join(', ')}. 같은 요일 비교 때 감안하세요.`);
+    const full = weeks.filter((x) => x.n === 7);
+    if (full.length >= 2) {
+      const hiW = d3.greatest(full, (x) => x.rev), loW = d3.least(full, (x) => x.rev);
+      ins('주차', `기간 안 주별 광고 매출: ${full.map((x) => compact(x.rev)).join(' → ')}. 가장 높은 주 ${wl(hiW.w)}(ROAS ${fmtR(hiW.roas)}), 가장 낮은 주 ${wl(loW.w)}(ROAS ${fmtR(loW.roas)}).`, conf(loW));
+      let k = 0, dir = 0; for (let i = full.length - 1; i > 0; i--) { const d = Math.sign(full[i].roas - full[i - 1].roas); if (!dir) dir = d; if (d !== dir || !d) break; k++; }
+      if (k >= 2) ins('추세', `기간 끝까지 ROAS가 ${k}주 연속 ${dir > 0 ? '상승' : '하락'}했어요 (${fmtR(full[full.length - 1 - k].roas)} → ${fmtR(full[full.length - 1].roas)}).`, conf(full[full.length - 1]));
+    }
+    const SA = salesIn(s, e), SB = salesIn(cs, ce);
+    if (SA && SA.rows.length) {
+      const sa = d3.sum(SA.rows, (r) => r.rev), sb = SB ? d3.sum(SB.rows, (r) => r.rev) : 0; const ok = SA.covers;
+      const both = ok && SB && SB.covers && sb; const es = both ? explainSales(SA.rows, SB.rows, A, B) : { txt: '', label: '' };
+      const sA = sagg(SA.rows), sB = both ? sagg(SB.rows) : null;
+      BX.ssum.push({ k: sLab, v: compact(sa) + '원', chg: both ? `${cname} 대비 ${pctTxt(sa, sb)}` : ok ? '' : `실매출은 ${short(SA.smax)}까지 있어요`, good: both ? sg(sa - sb) : 0, cause: es.label, txt: es.txt },
+        { k: '주문 수', v: fmtN(sA.ord) + '건', chg: both ? pctTxt(sA.ord, sB.ord) : '', good: both ? sg(sA.ord - sB.ord) : 0, cause: `객단가 ${compact(sA.aov)}원` + (both ? ` (${pctTxt(sA.aov, sB.aov)})` : '') },
+        { k: 'MER (실매출÷광고비)', v: A.cost && ok ? fmtR(sa / A.cost) : '–', chg: both && B.cost ? ppTxt(sa / A.cost, sb / B.cost) : '', good: both && B.cost ? sg(sa / A.cost - sb / B.cost) : 0, cause: both && B.cost ? `광고비 ${pctTxt(A.cost, B.cost)}, 실매출 ${pctTxt(sa, sb)}` : '' });
+      if (both) {
+        const D = sa - sb; const cb = (key) => { const ma = new Map(d3.rollups(SA.rows.filter((r) => key(r) != null), (v) => d3.sum(v, (r) => r.rev), key)), mb = new Map(d3.rollups(SB.rows.filter((r) => key(r) != null), (v) => d3.sum(v, (r) => r.rev), key));
+          const l = [...new Set([...ma.keys(), ...mb.keys()])].map((k) => [k, (ma.get(k) || 0) - (mb.get(k) || 0)]).filter((x) => Math.abs(x[1]) >= 0.05 * Math.abs(D) && Math.abs(x[1]) >= 1e5).sort((x, y) => y[1] - x[1]);
+          return [...l.filter((x) => x[1] > 0).slice(0, 3), ...l.filter((x) => x[1] < 0).slice(-3).reverse()]; };
+        [...(effCh().length > 1 ? [['판매채널', (r) => r.channel]] : []), ['판매유형', (r) => r.kind || '일반'], ['프로모션명', (r) => (r.kind === '일반' ? null : r.promo || '(이름 없음)')], ['제품군', (r) => r.group], ['박스', (r) => r.box || '(미표기)']]
+          .filter(([n]) => !(n === '제품군' && selP.length === 1)).forEach(([n, key]) => { const l = cb(key); if (l.length) BX.sbrk.push([n, l]); });
+      }
+    }
+
+    // 요일
+    const byW = d3.rollups(rows, (v) => ({ ...agg(v), days: new Set(v.map((r) => r.day)).size }), (r) => wdi(r.t)).sort((a, b) => a[0] - b[0]);
+    const T = agg(rows);
+    const sDay = SS ? [...SS.byDay.entries()].filter(([d]) => d >= s8 && d <= e) : [];
+    const sw = new Map(d3.rollups(sDay, (v) => ({ rev: d3.sum(v, (x) => x[1]), n: v.length }), ([d]) => wdi(parse(d))));
+    const costByDay = new Map(d3.rollups(rows, (v) => d3.sum(v, (r) => r.cost), (r) => r.day));
+    const swCost = new Map(d3.rollups(sDay, (v) => d3.sum(v, ([d]) => costByDay.get(d) || 0), ([d]) => wdi(parse(d))));
+    head(tD, ['요일', '평균 비용', '평균 매출', 'ROAS', 'ROAS 평균 대비', '전환', 'CVR', 'CPA', '평균 실매출', 'MER']);
+    const bd = el('tbody');
+    byW.forEach(([i, x]) => {
+      const tr = el('tr'); tr.append(el('td', 'l', WDN[i] + ` (${x.days}일)`));
+      const d = delta('roas', x.roas, T.roas);
+      [fmtN(x.cost / x.days), fmtN(x.rev / x.days), fmtR(x.roas)].forEach((v) => tr.append(tdN(v))); tr.append(tdN(d.txt, cls(d.good)));
+      [fmtN(x.conv), fmtP2(x.cvr), fmtN(x.cpa)].forEach((v) => tr.append(tdN(v)));
+      const s = sw.get(i); const sc = swCost.get(i) || 0; tr.append(tdN(s ? fmtN(s.rev / s.n) : ''), tdN(s && sc ? fmtR(s.rev / sc) : '')); bd.append(tr);
+    });
+    const tt = el('tr', 'tot'); tt.append(el('td', 'l', '전체')); const nd = new Set(rows.map((r) => r.day)).size;
+    [fmtN(T.cost / nd), fmtN(T.rev / nd), fmtR(T.roas), '', fmtN(T.conv), fmtP2(T.cvr), fmtN(T.cpa)].forEach((v) => tt.append(tdN(v)));
+    const sTot = d3.sum(sDay, (x) => x[1]), cTot = d3.sum(sDay, ([d]) => costByDay.get(d) || 0); tt.append(tdN(sDay.length ? fmtN(sTot / sDay.length) : ''), tdN(cTot ? fmtR(sTot / cTot) : '')); bd.append(tt); tD.append(bd);
+
+    if (nDays < 14) ins('요일', '요일 비교는 기간을 2주 이상으로 잡으면 나와요. 아래 요일별 표는 선택 기간 그대로예요.');
+    else if (T.conv < 30) ins('요일', `선택 기간 전환이 ${fmtN(T.conv)}건뿐이라 요일 비교는 건너뛰었어요.`);
+    else if (byW.length >= 5) {
+      const srt = [...byW].sort((a, b) => b[1].roas - a[1].roas); const hi = srt[0], lo = srt[srt.length - 1];
+      const minConv = d3.min(byW, (x) => x[1].conv);
+      const cellsOf = (i) => d3.rollups(rows.filter((r) => wdi(r.t) === i), agg, (r) => mondayOf(r.t)).filter(([, c]) => c.cost);
+      const hc = cellsOf(hi[0]); const top = d3.greatest(hc, ([, c]) => c.rev);
+      const med = d3.median(hc, ([, c]) => c.roas);
+      const skew = top && hi[1].rev && top[1].rev / hi[1].rev > 0.35 ? ` 다만 ${short(iso(top[0]))} 주 ${WDN[hi[0]]}요일 하루(ROAS ${fmtR(top[1].roas)})가 평균을 크게 끌어올린 거라, 주별 중앙값으로 보면 ${fmtR(med)}이에요.` : '';
+      ins('요일', `선택 기간 합계 기준 ROAS는 ${WDN[hi[0]]}요일이 가장 높고(${fmtR(hi[1].roas)}) ${WDN[lo[0]]}요일이 가장 낮아요(${fmtR(lo[1].roas)}). 전체 ${fmtR(T.roas)}.` + skew, minConv >= 30 ? '요일마다 전환 30건 이상' : minConv < 10 ? '요일별 전환이 적어 참고용' : '신뢰도 보통');
+      const wk = byW.filter(([i]) => i >= 5).map((x) => x[1]), wd2 = byW.filter(([i]) => i < 5).map((x) => x[1]);
+      if (wk.length && wd2.length) {
+        const sum = (arr) => arr.reduce((s, x) => ({ cost: s.cost + x.cost, rev: s.rev + x.rev, days: s.days + x.days, conv: s.conv + x.conv }), { cost: 0, rev: 0, days: 0, conv: 0 });
+        const W = sum(wk), D = sum(wd2); const dd = d3.rollups(rows, agg, (r) => r.day).filter(([, x]) => x.cost); const rW = d3.median(dd.filter(([d]) => wdi(parse(d)) >= 5), ([, x]) => x.roas) || 0, rD = d3.median(dd.filter(([d]) => wdi(parse(d)) < 5), ([, x]) => x.roas) || 0;
+        const cr = D.cost ? (W.cost / W.days) / (D.cost / D.days) : 0;
+        let tail = '';
+        const monTop = !skew && hi[0] === 0;
+        if (rD - rW > 0.3 && cr > 0.8) tail = ' 주말 효율이 낮은데 비용은 평일과 비슷해요. 주말 입찰·예산을 낮춰 보는 걸 검토해 볼 만해요(제안).' + (monTop ? ' 다만 월요일 ROAS가 가장 높아서, 주말에 본 사람이 월요일에 사는 지연 효과일 수 있어요. 주말 예산을 줄이기 전에 전환 기여 기간을 같이 확인해 보세요.' : '');
+        else if (rW - rD > 0.3 && cr < 0.9) tail = ' 주말 효율이 더 좋은데 비용은 덜 쓰고 있어요. 주말 예산 확대를 검토해 볼 만해요(제안).';
+        ins('요일', `주말 하루 평균 비용은 평일의 ${d3.format('.0%')(cr)}, 일별 ROAS 중앙값은 주말 ${fmtR(rW)} vs 평일 ${fmtR(rD)} (${ppTxt(rW, rD)}).` + tail, conf(W));
+      }
+      if (sw.size >= 5) {
+        const ss = [...sw.entries()].sort((a, b) => b[1].rev / b[1].n - a[1].rev / a[1].n);
+        ins('실매출', `${sLab}은 ${WDN[ss[0][0]]}요일이 하루 평균 ${compact(ss[0][1].rev / ss[0][1].n)}원으로 가장 많고, ${WDN[ss[ss.length - 1][0]]}요일이 ${compact(ss[ss.length - 1][1].rev / ss[ss.length - 1][1].n)}원으로 가장 적어요.`);
+      }
+    }
+    // 특이일: 선택 기간의 날을 시작일 전 8주 같은 요일 평균과 비교
+    const baseRows = fc.filter((r) => r.t >= w0 - 56 * DAY && r.t < w0);
+    const baseDay = d3.rollups(baseRows, agg, (r) => r.day);
+    const dayAgg = d3.rollups(rowsC, agg, (r) => r.day).sort((a, b) => d3.ascending(a[0], b[0]));
+    // 급변일: 전날 대비 광고비·광고 매출·실매출이 크게 바뀐 날과 그 원인
+    const dayMap = new Map(d3.rollups(fc.filter((r) => r.t >= w0 - DAY && r.t <= endT), agg, (r) => r.day));
+    const SJ = salesIn(iso(w0 - DAY), e);
+    const sOf = (d) => (SJ && SJ.has(d) ? SJ.byDay.get(d) || 0 : null);
+    const nd2 = Math.max(1, dayAgg.length); const avgC = A.cost / nd2, avgR = A.rev / nd2;
+    const sVals = dayAgg.map(([d]) => sOf(d)).filter((v) => v != null); const avgS = sVals.length ? d3.mean(sVals) : 0;
+    const jumps = []; const sJump = new Set();
+    dayAgg.forEach(([d, x]) => {
+      const pd = iso(parse(d) - DAY); const p = dayMap.get(pd); const ms = [];
+      if (p) [['cost', '광고비', avgC], ['rev', '광고 매출', avgR]].forEach(([k, n, avg]) => { const dv = x[k] - p[k]; if (avg && p[k] && Math.abs(dv) >= 0.3 * avg && Math.abs(dv / p[k]) >= 0.4) ms.push({ k, n, a: x[k], b: p[k], dv, sc: Math.abs(dv) / avg }); });
+      const sv = sOf(d), sp = sOf(pd);
+      if (sv != null && sp && avgS && Math.abs(sv - sp) >= 0.3 * avgS && Math.abs(sv / sp - 1) >= 0.4) ms.push({ k: 'sales', n: '실매출', a: sv, b: sp, dv: sv - sp, sc: Math.abs(sv - sp) / avgS });
+      if (ms.length) jumps.push({ d, pd, x, p, ms, sc: d3.max(ms, (m) => m.sc) });
+      if (ms.some((m) => m.k === 'sales')) sJump.add(d);
+    });
+    const SW = salesIn(iso(w0 - 42 * DAY), e);
+    const sWk = (d, v) => { if (!SW) return null; const i = wdi(parse(d)); const xs = []; for (let t0 = parse(d) - 7 * DAY; t0 >= parse(d) - 28 * DAY; t0 -= 7 * DAY) { const dd = iso(t0); if (SW.has(dd)) xs.push(SW.byDay.get(dd) || 0); } const m = xs.length >= 3 ? d3.median(xs) : 0; return m ? v / m - 1 : null; };
+    const sameWk = (d, k) => { const i = wdi(parse(d)); const b = baseDay.filter(([d2]) => wdi(parse(d2)) === i).map((y) => y[1][k]); return b.length >= 3 ? d3.mean(b) : 0; };
+    const scOf = (j, isS) => d3.max(j.ms.filter((m) => (m.k === 'sales') === isS), (m) => m.sc) || 0;
+    const topJ = [...new Set([...[...jumps].sort((p, q) => scOf(q, false) - scOf(p, false)).filter((j) => scOf(j, false)).slice(0, 5), ...[...jumps].sort((p, q) => scOf(q, true) - scOf(p, true)).filter((j) => scOf(j, true)).slice(0, 6)])].sort((p, q) => d3.ascending(p.d, q.d));
+    const jumpDays = new Set(topJ.map((j) => j.d));
+    topJ.forEach((j) => {
+      const head0 = j.ms.map((m) => `${m.n} ${compact(m.b)}→${compact(m.a)}원(${pctTxt(m.a, m.b)})`).join(', ');
+      const mAd = d3.greatest(j.ms.filter((m) => m.k !== 'sales'), (m) => m.sc); const mS = j.ms.find((m) => m.k === 'sales');
+      const segs = []; let ex = null;
+      if (mAd) { const sr1 = srcRange(j.d, j.d, j.pd, j.pd); ex = diagRows(sr1.ra, sr1.rb, 1, sr1.key, mAd.k, sOf(j.d), j.x, j.p); if (ex.txt) segs.push(ex.txt); }
+      let es = null; if (mS) { es = explainSales(SJ.rows.filter((r) => r.day === j.d), SJ.rows.filter((r) => r.day === j.pd), dayMap.get(j.d), dayMap.get(j.pd)); if (es.txt) segs.push('실매출은 ' + es.txt); }
+      let wk = '', rebound = false;
+      if (mAd) { const b = sameWk(j.d, mAd.k), bp = sameWk(j.pd, mAd.k); const r = b ? j.x[mAd.k] / b - 1 : null, rp = bp ? j.p[mAd.k] / bp - 1 : null;
+        if (rp != null && Math.abs(rp) >= 0.4 && Math.sign(rp) === -Math.sign(mAd.dv) && (r == null || Math.abs(r) < Math.abs(rp))) { rebound = true; wk = ` 다만 전날 ${lab(j.pd)}가 평소 ${WDN[wdi(parse(j.pd))]}요일보다 ${rp > 0 ? '+' : ''}${d3.format('.0%')(rp)} ${rp > 0 ? '튀었던' : '빠졌던'} 날이라, 낙폭·상승폭의 상당 부분은 그 반동이에요` + (r != null ? `(이날은 평소 ${WDN[wdi(parse(j.d))]}요일 대비 ${r > 0 ? '+' : ''}${d3.format('.0%')(r)}).` : '.'); }
+        else if (r != null && Math.abs(r) <= 0.2) wk = ` 평소 ${WDN[wdi(parse(j.d))]}요일 수준으로 돌아온 거라 요일 패턴에 가까워요.`; }
+      const up = (mAd || mS).dv > 0;
+      const anom = ex && /전환값/.test(ex.tip);
+      const lk = rebound || anom ? '' : link(up, ctxOf(j.d, j.d), ex ? ex.main || 'rev' : 'sales');
+      const lag = j.d >= iso(parse(maxDay) - DAY) && j.ms.some((m) => m.k === 'rev' && m.dv < 0) ? ' 최근 1~2일은 매체 매출이 늦게 잡혀 낮게 보일 수 있어요.' : '';
+      const ll = rebound || anom ? '' : linkLab(up, ctxOf(j.d, j.d), ex ? ex.main || 'rev' : 'sales');
+      if (mS) { const sUp = mS.dv > 0, cS = ctxOf(j.d, j.d); const sl = linkLab(sUp, cS, 'sales'), sk = link(sUp, cS, 'sales');
+        const rs = sWk(j.d, mS.a), rsp = sWk(j.pd, mS.b); const wn = (d) => WDN[wdi(parse(d))] + '요일';
+        const sReb = rsp != null && Math.abs(rsp) >= 0.4 && Math.sign(rsp) === -Math.sign(mS.dv) && (rs == null || Math.abs(rs) < Math.abs(rsp));
+        const sPat = !sReb && rs != null && Math.abs(rs) <= 0.25 && (rsp == null || Math.abs(rsp) <= 0.25);
+        if (!sPat) BX.srows.push({ d: j.d, rg: lab(j.d), chg: [{ t: `실매출 ${pctTxt(mS.a, mS.b)}`, good: sg(mS.dv) }, ...(j.p && j.p.cost ? [{ t: `광고비 ${pctTxt(j.x.cost, j.p.cost)}`, good: 0 }] : [])], basis: `전날 대비 (${compact(mS.b)}→${compact(mS.a)}원)`,
+          cause: [sReb ? `전날(${wn(j.pd)}) ${rsp > 0 ? '급등' : '급락'}의 반동` : '', es && es.label, sl].filter(Boolean).join(' · '), act: '', txt: (sReb ? `전날 ${lab(j.pd)}가 평소 ${wn(j.pd)}보다 ${pctTxt(1 + rsp, 1)}였던 날이라 반동이 커 보여요(이날은 평소 ${wn(j.d)} 대비 ${rs == null ? '–' : pctTxt(1 + rs, 1)}). ` : rs != null ? `이날은 평소 ${wn(j.d)} 대비 ${pctTxt(1 + rs, 1)}. ` : '') + (es ? es.txt : '') + (sk ? ' ' + sk : '') }); }
+      if (mAd) BX.rows.push({ d: j.d, rg: lab(j.d), chg: j.ms.filter((m) => m.k !== 'sales').map((m) => ({ t: `${m.n} ${pctTxt(m.a, m.b)}`, good: sg(m.dv) })), basis: '전날 대비',
+        cause: [rebound ? '전날 급변의 반동' : '', ex && ex.label, ll].filter(Boolean).join(' · '),
+        act: (ex && ex.tip) || '', txt: `전날 대비 ${head0}. ` + (ex ? ex.txt : '') + wk + (lk ? ' ' + lk : '') + lag });
+    });
+    const odd = [];
+    dayAgg.forEach(([d, x]) => {
+      const i = wdi(parse(d)); const base = baseDay.filter(([d2]) => wdi(parse(d2)) === i).map((y) => y[1]);
+      if (base.length < 3 || x.cost < 1e5 || jumpDays.has(d)) return; const m = d3.mean(base, (y) => y.rev); if (!m) return;
+      const r = x.rev / m - 1; if (Math.abs(r) >= 0.4) odd.push({ d, r });
+    });
+    // 이어진 날끼리 묶어서, 시작 전 8주 같은 요일 평균과 비교해 원인 분해
+    const oruns = []; odd.forEach((x) => { const lr = oruns[oruns.length - 1]; if (lr && Math.sign(lr.r) === Math.sign(x.r) && parse(x.d) - parse(lr.end) === DAY) { lr.end = x.d; lr.sc += Math.abs(x.r); } else oruns.push({ start: x.d, end: x.d, r: x.r, sc: Math.abs(x.r) }); });
+    oruns.sort((p, q) => q.sc - p.sc).slice(0, 3).sort((p, q) => d3.ascending(p.start, q.start)).forEach((x) => {
+      const rr = rowsC.filter((r) => r.day >= x.start && r.day <= x.end); const n = new Set(rr.map((r) => r.day)).size;
+      const wds = new Set(rr.map((r) => wdi(r.t))); const bR = baseRows.filter((r) => wds.has(wdi(r.t))); const nb = new Set(bR.map((r) => r.day)).size; if (!nb) return;
+      const k = n / nb; const Aa = agg(rr), Bb = scaleAgg(agg(bR), k);
+      const ex = diagRows(rr, bR, k, uKey, 'rev', null, Aa, Bb);
+      const up = Aa.rev > Bb.rev; const anom = /전환값/.test(ex.tip);
+      const lk = anom ? '' : link(up, ctxOf(x.start, x.end), ex.main || 'rev');
+      const rg = x.start === x.end ? lab(x.start) : lab(x.start) + '~' + lab(x.end);
+      const ll = anom ? '' : linkLab(up, ctxOf(x.start, x.end), ex.main || 'rev');
+      BX.rows.push({ d: x.start, rg, chg: [{ t: `광고 매출 ${pctTxt(Aa.rev, Bb.rev)}`, good: sg(Aa.rev - Bb.rev) }], basis: '평소 같은 요일 대비', cause: [ex.label, ll].filter(Boolean).join(' · '), act: ex.tip || '',
+        txt: `평소(시작 전 8주 같은 요일 평균)보다 광고 매출 ${pctTxt(Aa.rev, Bb.rev)}. ` + ex.txt + (lk ? ' ' + lk : '') + (x.end >= iso(parse(maxDay) - DAY) ? ' 최근 1~2일은 매체 매출이 늦게 잡혀 낮게 보일 수 있어요.' : '') });
+    });
+
+    // 실매출 급등·급감: 직전 28일 중앙값 대비, 프로모션명·캘린더 행사와 함께
+    const SL = salesIn(iso(w0 - 35 * DAY), e);
+    if (SL && SL.rows.length) {
+      const allD = []; for (let t0 = w0 - 35 * DAY; t0 <= endT; t0 += DAY) { const d = iso(t0); if (SL.has(d)) allD.push([d, SL.byDay.get(d) || 0]); }
+      const flag = [];
+      allD.forEach(([d, v], i) => { if (d < s8) return; const same = allD.slice(0, i).filter((x) => wdi(parse(x[0])) === wdi(parse(d))).slice(-4); if (same.length < 3) return; const base = d3.median(same, (x) => x[1]); if (!base) return; const r = v / base; if (r >= 1.6 || r <= 0.5) flag.push({ d, v, r, up: r >= 1.6 }); });
+      const runs = []; flag.forEach((x) => { const lr = runs[runs.length - 1]; if (lr && lr.up === x.up && parse(x.d) - parse(lr.end) === DAY) { lr.end = x.d; lr.items.push(x); } else runs.push({ up: x.up, start: x.d, end: x.d, items: [x] }); });
+      const topPromo = (a, b) => { const rr = SL.rows.filter((r) => r.day >= a && r.day <= b); const tot = d3.sum(rr, (r) => r.rev); const tp = d3.rollups(rr.filter((r) => r.kind !== '일반'), (v) => d3.sum(v, (r) => r.rev), (r) => r.promo).sort((p, q) => q[1] - p[1]).slice(0, 2); return tp.map(([k, v]) => `${k || '(이름 없음)'} ${d3.format('.0%')(v / tot)}`).join(', '); };
+      const rng = (x) => (x.start === x.end ? lab(x.start) : lab(x.start) + '~' + lab(x.end));
+      const why2 = (x) => { const n = Math.round((parse(x.end) - parse(x.start)) / DAY) + 1; const wds = new Set(); for (let t0 = parse(x.start); t0 <= parse(x.end); t0 += DAY) wds.add(wdi(t0)); const b0 = iso(parse(x.start) - 28 * DAY), b1 = iso(parse(x.start) - DAY);
+        const sb = SL.rows.filter((r) => r.day >= b0 && r.day <= b1 && wds.has(wdi(parse(r.day)))); const nb = new Set(sb.map((r) => r.day)).size; if (!nb) return { txt: '', label: '' }; const k = n / nb;
+        const aA = agg(f.filter((r) => r.day >= x.start && r.day <= x.end)), aB = scaleAgg(agg(f.filter((r) => r.day >= b0 && r.day <= b1 && wds.has(wdi(r.t)))), k);
+        const t = explainSales(SL.rows.filter((r) => r.day >= x.start && r.day <= x.end), sb, aA, aB, k); return { txt: t.txt ? ' 최근 4주 같은 요일 대비 ' + t.txt : '', label: t.label, ad: aB.cost ? { t: `광고비 ${pctTxt(aA.cost, aB.cost)}`, good: 0 } : null }; };
+      runs.filter((x) => x.up).sort((a, b) => d3.max(b.items, (y) => y.v) - d3.max(a.items, (y) => y.v)).slice(0, 4).sort((a, b) => d3.ascending(a.start, b.start)).forEach((x) => {
+        const pk = d3.greatest(x.items, (y) => y.v); const ev = evOn(x.start, x.end, ['공식몰', '공구']); const ev2 = evP(evOn(x.start, x.end, ['네이버', '카카오', '홈쇼핑']));
+        const hl = holIn(x.start, x.end);
+        const startHit = ev.find((y) => parse(x.start) - parse(y.start) <= DAY && parse(x.start) >= parse(y.start));
+        if (x.start === x.end && sJump.has(x.start)) return; const w2 = why2(x);
+        BX.srows.push({ d: x.start, rg: rng(x), chg: [{ t: `실매출 ×${pk.r.toFixed(1)}`, good: 1 }, ...(w2.ad ? [w2.ad] : [])], basis: '최근 같은 요일 대비', cause: [w2.label, startHit ? startHit.name + ' 시작' : ev.length ? ev[0].name + ' 진행 중' : '', ...hl].filter(Boolean).join(' · '), act: ev.length ? '' : '캘린더에 공식몰 행사가 없어요. 공구·바이럴 등 외부 요인을 확인해 보세요.', txt: `${sLab}이 최근 같은 요일의 ${pk.r.toFixed(1)}배(최고 ${compact(pk.v)}원). 많이 팔린 프로모션 상품: ${topPromo(x.start, x.end) || '없음'}. ` + (ev.length ? `진행 행사: ${ev.map((y) => y.name).join(', ')}` + (startHit ? ' (행사 시작 직후)' : '') + '.' : '캘린더에 공식몰 행사가 없어서 공구·바이럴 등 다른 요인을 확인해 보세요.') + (ev2.length ? ` 같은 기간 ${ev2.map(evName).join(', ')}.` : '') + (hl.length ? ` (${hl.join('·')})` : '') + w2.txt });
+      });
+      runs.filter((x) => !x.up).sort((a, b) => d3.descending(a.start, b.start)).slice(0, 3).sort((a, b) => d3.ascending(a.start, b.start)).forEach((x) => {
+        const hl = holIn(x.start, x.end);
+        const lo = d3.least(x.items, (y) => y.r); const ev = evOn(x.start, x.end, ['공식몰']); const ev2 = evP(evOn(x.start, x.end, ['네이버', '카카오', '홈쇼핑', '기타']));
+        const endBefore = promoEvents().filter((y) => y.channel === '공식몰' && y.end < x.start && parse(x.start) - parse(y.end) <= 3 * DAY);
+        if (x.start === x.end && sJump.has(x.start)) return; const w2 = why2(x);
+        BX.srows.push({ d: x.start, rg: rng(x), chg: [{ t: `실매출 ×${lo.r.toFixed(1)}`, good: -1 }, ...(w2.ad ? [w2.ad] : [])], basis: '최근 같은 요일 대비', cause: [...hl, endBefore.length ? endBefore[0].name + ' 종료 직후' : '', w2.label].filter(Boolean).join(' · '), act: !hl.length && ev.length ? '행사가 길어진 피로감일 수 있어요. 행사 중반 혜택 변화를 검토해 보세요.' : '', txt: `${sLab}이 최근 같은 요일의 ${lo.r.toFixed(1)}배까지 떨어졌어요. ` + (hl.length ? `${hl.join('·')} 기간이에요. ` : '') + (ev.length ? `공식몰 ${ev.map((y) => y.name).join(', ')} 기간 중이었어요` + (hl.length ? '.' : '. 행사가 길어진 피로감일 수 있어요.') : '이 기간엔 공식몰 행사가 없었어요' + (endBefore.length ? ` (${endBefore.map((y) => y.name).join(', ')} 종료 직후)` : '') + '.') + (ev2.length ? ` 같은 기간 ${ev2.map(evName).join(', ')} 진행.` : '') + w2.txt });
+      });
+      const inWin = SL.rows.filter((r) => r.day >= s8 && r.day <= e); const totW = d3.sum(inWin, (r) => r.rev);
+      const tpW = d3.rollups(inWin.filter((r) => r.kind !== '일반'), (v) => d3.sum(v, (r) => r.rev), (r) => r.promo).filter((x) => x[1] > 0).sort((p, q) => q[1] - p[1]).slice(0, 3);
+      if (tpW.length && totW) ins('프로모션', `선택 기간 ${sLab} 상위 프로모션명: ${tpW.map(([k, v]) => `${k || '(이름 없음)'} ${compact(v)}원(${d3.format('.0%')(v / totW)})`).join(', ')}. 프로모션·공구 상품이 실매출의 ${d3.format('.0%')(d3.sum(inWin.filter((r) => r.kind === '프로모션' || r.kind === '공구'), (r) => r.rev) / totW)}예요.`);
+    }
+
+
+    // 주별 변동: 선택 기간에 걸친 주(월~일)를 전주 같은 요일 구간과 비교해 원인 분해 (최근 8주)
+    const WK = { rows: [], srows: [] };
+    {
+      const wks = []; for (let t0 = mondayOf(w0); t0 <= endT; t0 += 7 * DAY) wks.push(t0);
+      const SWK = salesIn(iso(mondayOf(w0) - 7 * DAY), e);
+      wks.slice(-8).forEach((m0) => {
+        const a0 = Math.max(m0, w0), a1 = Math.min(m0 + 6 * DAY, endT), b0 = a0 - 7 * DAY, b1 = a1 - 7 * DAY;
+        const n = Math.round((a1 - a0) / DAY) + 1; const A0 = iso(a0), A1d = iso(a1), B0 = iso(b0), B1d = iso(b1);
+        const rg = short(A0) + '~' + short(A1d) + (n < 7 ? ` (${n}일)` : '');
+        const basis = `전주 같은 요일(${short(B0)}~${short(B1d)}) 대비`;
+        const Aa = agg(fc.filter((r) => r.t >= a0 && r.t <= a1)), Bb = agg(fc.filter((r) => r.t >= b0 && r.t <= b1));
+        const c = ctxOf(A0, A1d);
+        if (Aa.cost || Bb.cost) {
+          const main = Math.abs(Aa.rev / Math.max(Bb.rev, 1) - 1) >= Math.abs(Aa.cost / Math.max(Bb.cost, 1) - 1) ? 'rev' : 'cost';
+          const big = (Bb.rev && Math.abs(Aa.rev / Bb.rev - 1) >= 0.15) || (Bb.cost && Math.abs(Aa.cost / Bb.cost - 1) >= 0.15);
+          let ex = null; if (big && (Bb.rev || Bb.cost)) { const sr = srcRange(A0, A1d, B0, B1d); ex = diagRows(sr.ra, sr.rb, 1, sr.key, main, null, Aa, Bb); }
+          const up = Aa[main] > Bb[main]; const anom = ex && /전환값/.test(ex.tip || '');
+          const mm = (ex && ex.main) || main; const ll = big && !anom ? linkLab(up, c, mm) : '', lk = big && !anom ? link(up, c, mm) : '';
+          WK.rows.push({ d: A0, rg, chg: [{ t: `광고 매출 ${pctTxt(Aa.rev, Bb.rev)}`, good: sg(Aa.rev - Bb.rev) }, { t: `광고비 ${pctTxt(Aa.cost, Bb.cost)}`, good: 0 }, { t: `ROAS ${fmtR(Bb.roas)}→${fmtR(Aa.roas)}`, good: sg(Aa.roas - Bb.roas) }],
+            basis, cause: big ? [ex && ex.label, ll].filter(Boolean).join(' · ') : '전주와 비슷한 수준(±15% 이내)', act: (big && ex && ex.tip) || '',
+            txt: `매출 ${compact(Bb.rev)}→${compact(Aa.rev)}원, 광고비 ${compact(Bb.cost)}→${compact(Aa.cost)}원. ` + (ex ? ex.txt : '') + (lk ? ' ' + lk : '') + (a1 >= parse(maxDay) - DAY ? ' 최근 1~2일은 매체 매출이 늦게 잡혀 낮게 보일 수 있어요.' : '') });
+        }
+        if (SWK) {
+          let ok = true; for (let t0 = b0; t0 <= a1; t0 += DAY) if (!SWK.has(iso(t0))) { ok = false; break; }
+          if (ok) {
+            const sa = SWK.rows.filter((r) => r.day >= A0 && r.day <= A1d), sb = SWK.rows.filter((r) => r.day >= B0 && r.day <= B1d);
+            const va = d3.sum(sa, (r) => r.rev), vb = d3.sum(sb, (r) => r.rev);
+            if (va || vb) {
+              const big = vb && Math.abs(va / vb - 1) >= 0.15; const es = big ? explainSales(sa, sb, Aa, Bb) : { txt: '', label: '' };
+              const sl = big ? linkLab(va > vb, c, 'sales') : '', sk = big ? link(va > vb, c, 'sales') : '';
+              const og = evOn(A0, A1d, ['공식몰', '공구']);
+              WK.srows.push({ d: A0, rg, chg: [{ t: `실매출 ${pctTxt(va, vb)}`, good: sg(va - vb) }, ...(Bb.cost ? [{ t: `광고비 ${pctTxt(Aa.cost, Bb.cost)}`, good: 0 }] : [])], basis: basis + ` (${compact(vb)}→${compact(va)}원)`,
+                cause: big ? [es.label, sl, !sl && og.length ? evName(og[0]) + ' 진행' : ''].filter(Boolean).join(' · ') : '전주와 비슷한 수준(±15% 이내)', act: '',
+                txt: (es.txt ? '실매출은 ' + es.txt : '') + (sk ? ' ' + sk : '') });
+            }
+          }
+        }
+      });
+    }
+
+    // 추가 점검: 분석할 때 같이 봐야 할 신호 (매체·제품 단위)
+    const CK = [];
+    {
+      const seg = (r) => r.media + ' ' + r.product;
+      const tot = d3.sum(rowsC, (r) => r.cost) || 1;
+      const gB = new Map(d3.groups(prevC, seg));
+      const segs = d3.groups(rowsC, seg).map(([k, v]) => ({ k, v, a: agg(v), pv: gB.get(k) || [], b: agg(gB.get(k) || []) }))
+        .filter((x) => x.a.cost >= Math.max(3e4, tot * 0.01)).sort((p, q) => q.a.cost - p.a.cost);
+      const actD = (v) => new Set(v.filter((r) => r.cost > 0).map((r) => r.day)).size;
+      const push = (c, list) => list.slice(0, 3).forEach((x) => CK.push({ c, ...x }));
+      // ① 집행일수 차이: 합계 대신 하루 평균으로 봐야 하는 곳
+      push('집행일수 차이', segs.map((x) => { const da = actD(x.v), db = actD(x.pv); if (!da || !db || Math.abs(da - db) < Math.max(3, 0.3 * Math.max(da, db))) return null;
+        return { t: x.k, sc: x.a.cost, fd: `집행일 ${db}일 → ${da}일. 합계 광고비 ${pctTxt(x.a.cost, x.b.cost)}, 매출 ${pctTxt(x.a.rev, x.b.rev)}지만 하루 평균은 광고비 ${pctTxt(x.a.cost / da, x.b.cost / db)}, 매출 ${pctTxt(x.a.rev / da, x.b.rev / db)}`, a: '합계보다 하루 평균으로 비교하세요. 꺼진 기간의 이유(예산·소재 교체)를 같이 적어 두면 좋아요.' }; }).filter(Boolean));
+      // ② 소재 피로 의심: 최근 4주 연속 ROAS 하락
+      { const last = mondayOf(endT) - (wdi(endT) < 3 ? 7 * DAY : 0); const ws = [3, 2, 1, 0].map((i) => last - i * 7 * DAY);
+        push('ROAS 연속 하락(피로 의심)', segs.map((x) => { const all = fc.filter((r) => seg(r) === x.k && r.t >= ws[0] && r.t < last + 7 * DAY);
+          const rs = ws.map((w) => agg(all.filter((r) => r.t >= w && r.t < w + 7 * DAY))); if (rs.some((r) => !r.cost)) return null;
+          const dn = rs.every((r, i) => !i || r.roas < rs[i - 1].roas); if (!dn || rs[3].roas > rs[0].roas * 0.75) return null;
+          return { t: x.k, sc: x.a.cost, fd: `주별 ROAS ${rs.map((r) => fmtR(r.roas)).join(' → ')} (CTR ${fmtP2(rs[0].ctr)} → ${fmtP2(rs[3].ctr)}, CVR ${fmtP2(rs[0].cvr)} → ${fmtP2(rs[3].cvr)})`, a: rs[3].ctr < rs[0].ctr * 0.85 ? 'CTR도 떨어지고 있어요. 소재 교체 시점이에요.' : 'CTR은 버티는데 전환이 떨어져요. 랜딩·가격·행사 구성을 점검하세요.' }; }).filter(Boolean)); }
+      // ③ 검색광고: 순위 하락과 CTR 같이 보기
+      push('노출순위 하락', d3.groups(rowsC.filter((r) => r.rki > 0), (r) => r.media + ' ' + r.ctype + ' ' + r.product).map(([k, v]) => {
+        const a = agg(v), b = agg(prevC.filter((r) => r.rki > 0 && r.media + ' ' + r.ctype + ' ' + r.product === k)); if (!a.rank || !b.rank || a.rank - b.rank < 0.4 || a.cost < 1e4) return null;
+        return { t: k, sc: a.cost, fd: `노출순위 ${fmtRk(b.rank)} → ${fmtRk(a.rank)}, CTR ${fmtP2(b.ctr)} → ${fmtP2(a.ctr)}, 전환 ${fmtN(b.conv)} → ${fmtN(a.conv)}건`, a: a.ctr < b.ctr ? '순위가 밀리면서 클릭도 줄었어요. 입찰가와 경쟁 입찰을 확인하세요.' : '순위는 밀렸지만 CTR은 유지돼요. 입찰을 올리기 전에 전환부터 보세요.' }; }).filter(Boolean).sort((p, q) => q.sc - p.sc));
+      // ④ 클릭은 느는데 전환·객단가가 떨어짐: 유입 질 저하
+      push('유입 질 저하', segs.map((x) => { const a = x.a, b = x.b; if (a.clk < 50 || b.clk < 30 || !b.cvr || a.ctr < b.ctr * 1.15 || a.cvr > b.cvr * 0.85) return null;
+        return { t: x.k, sc: a.cost, fd: `CTR ${fmtP2(b.ctr)} → ${fmtP2(a.ctr)}로 올랐는데 CVR ${fmtP2(b.cvr)} → ${fmtP2(a.cvr)}, 객단가 ${fmtN(b.aov)} → ${fmtN(a.aov)}원`, a: '클릭을 부르는 소재와 실제 구매 상품·가격이 어긋나는지 보세요.' }; }).filter(Boolean));
+      // ⑤ 전환 0인데 비용 쓰는 캠페인
+      if (campR.length && s >= cMin) push('전환 없는 비용', d3.groups(campR.filter((r) => r.day >= s && r.day <= e && r.goal === '전환'), (r) => r.media + ' · ' + r.campaign).map(([k, v]) => { const a = agg(v); return a.cost >= 1e4 && !a.conv ? { t: k, sc: a.cost, fd: `광고비 ${fmtN(a.cost)}원, 클릭 ${fmtN(a.clk)}건, 전환 0건`, a: '키워드·소재를 끄거나 입찰을 낮출지 검토하세요.' } : null; }).filter(Boolean).sort((p, q) => q.sc - p.sc));
+      // ⑥ 디바이스 쏠림: 매출은 한쪽인데 다른 쪽에 비용
+      push('디바이스 쏠림', segs.map((x) => { const dv = d3.rollups(x.v.filter((r) => r.device !== 'PC+모바일'), agg, (r) => r.device); if (dv.length < 2 || !x.a.rev) return null;
+        const top = d3.greatest(dv, (d) => d[1].rev); const oth = dv.filter((d) => d !== top); const oc = d3.sum(oth, (d) => d[1].cost), orv = d3.sum(oth, (d) => d[1].rev);
+        if (top[1].rev / x.a.rev < 0.9 || oc < 1e4 || oc / x.a.cost < 0.15) return null;
+        return { t: x.k, sc: oc, fd: `매출 ${d3.format('.0%')(top[1].rev / x.a.rev)}가 ${top[0]}. 나머지(${oth.map((d) => d[0]).join('·')})는 광고비 ${fmtN(oc)}원(${d3.format('.0%')(oc / x.a.cost)})에 매출 ${fmtN(orv)}원`, a: `${oth.map((d) => d[0]).join('·')} 입찰 가중치를 낮추거나 따로 떼서 보세요.` }; }).filter(Boolean).sort((p, q) => q.sc - p.sc));
+    }
+
+    // 데이터 주의: 집계 이상값, 전환 기준 변경. 인사이트 맨 위에 둔다.
+    const bw0 = iso(Math.min(parse(cs), w0 - 56 * DAY));
+    const badIn = badG.filter(([k]) => { const d = k.split('|')[0]; return d >= bw0 && d <= e; });
+    const dq = [];
+    const spk = d3.rollups(fc.filter((r) => r.day >= bw0 && r.day <= e), agg, (r) => r.media, (r) => r.day).map(([m, v]) => [m, v.filter(([, a]) => a.conv >= 200 && a.cvr > 1).map((x) => x[0]).sort()]).filter((x) => x[1].length);
+    spk.forEach(([m, ds]) => dq.push([`${m} 전환이 클릭보다 많은 날 ${ds.length}일 (${short(ds[0])}~${short(ds[ds.length - 1])})`, `${m} 전환이 ${ds.length > 1 ? lab(ds[0]) + '~' + lab(ds[ds.length - 1]) + ' 중 ' + ds.length + '일' : lab(ds[0])} 클릭보다 많이 잡혔어요. 구매가 아닌 전환(조회·장바구니 등)이 섞인 걸로 보여서, 이 날짜가 낀 비교에서 ${m} 전환·CPA는 믿기 어려워요.`]));
+    if (badIn.length) dq.push([badIn.map(([k, a]) => { const [d, m, pr] = k.split('|'); return `${short(d)} ${m} ${pr} 광고 매출 ${compact(a.rev)}원 (전환 ${nC(a.conv)})`; }).join(', ') + ' · 전환값 오류 의심, 분석에서 제외', `${badIn.map(([k, a]) => { const [d, m, pr] = k.split('|'); return `${lab(d)} ${m} ${pr} 광고 매출 ${compact(a.rev)}원(전환 ${nC(a.conv)})`; }).join(', ')}: 전환 몇 건에 매출이 지나치게 커서 전환값 집계 오류로 보여요. 원인 분석과 평소 비교에서는 뺐고, 위 표 숫자는 원본 그대로예요. 매체의 전환값 설정을 확인해 보세요.`]);
+    flagged.forEach((x, m) => dq.push([`${m} 전환 집계 기준 변경 추정 (${short(x.d)}부터 전환율 ${pv(x.pre)}→${pv(x.post)})`, `${m} 전환율이 ${lab(x.d)}부터 하루 중앙값 ${pv(x.pre)}→${pv(x.post)}로 계단처럼 바뀌었는데 클릭·매출은 그만큼 변하지 않았어요. 실제 구매 변화가 아니라 전환 집계 기준(전환 액션 설정)이 바뀐 신호예요. 그 전후의 ${m} 전환·CVR·CPA는 비교하지 말고 매출·ROAS로 보세요.`]));
+    // 핵심 진단: 지표 변화(CPC·CTR·CPM·CVR·객단가·노출순위)를 서로 엮어 원인을 해석한다. 집계 이상값은 뺀 rowsC/prevC 기준.
+    const DG = [];
+    {
+      const rel = (a, b) => (b ? a / b - 1 : 0);
+      const jo = (w, a1, a2) => { const c = String(w).replace(/(\s*\([^)]*\))+\s*$/, '').trim().slice(-1).charCodeAt(0); const ch = String.fromCharCode(c).toUpperCase(); return c >= 0xac00 && c <= 0xd7a3 ? ((c - 0xac00) % 28 ? a1 : a2) : /[LMNR013678]/.test(ch) ? a1 : a2; };
+      const pcs = (a, b) => (b ? (a >= b ? '+' : '') + d3.format('.0%')(a / b - 1) : '–');
+      const segAll = d3.rollups(rowsC, agg, (r) => r.media + ' ' + r.ctype).map(([k, a]) => ({ k, a })), segB = new Map(d3.rollups(prevC, agg, (r) => r.media + ' ' + r.ctype));
+      const totC = d3.sum(segAll, (x) => x.a.cost) || 1;
+      const segs = segAll.filter((x) => x.a.cost / totC >= 0.08 && (segB.get(x.k) || {}).cost > 0).sort((p, q) => q.a.cost - p.a.cost).slice(0, 5);
+      const promoAt = (a0, a1, land) => evOn(a0, a1, land === '네이버' ? ['네이버'] : land === '공식몰' ? ['공식몰'] : ['공식몰', '네이버']);
+      segs.forEach(({ k, a }) => {
+        const b = segB.get(k); const media = k.split(' ')[0]; const rr = rowsC.filter((r) => r.media + ' ' + r.ctype === k);
+        const land = d3.greatest(d3.rollups(rr, (v) => d3.sum(v, (r) => r.cost), (r) => r.landing), (x) => x[1])?.[0];
+        const chips = [], why = [], act = [];
+        const dCpc = rel(a.cpc, b.cpc), dCtr = rel(a.ctr, b.ctr), dCpm = rel(a.cpm, b.cpm), dCvr = rel(a.cvr, b.cvr), dAov = rel(a.aov, b.aov);
+        const search = a.rank > 0 && b.rank > 0; const sLike = search || /SA|BSA|파워/.test(k); const dRk = search ? a.rank - b.rank : 0; // +면 순위 밀림
+        if (a.clk && b.clk) chips.push({ t: `CPC ${pcs(a.cpc, b.cpc)}`, good: Math.abs(dCpc) < 0.1 ? 0 : dCpc > 0 ? -1 : 1 });
+        if (search) chips.push({ t: `순위 ${b.rank.toFixed(1)}→${a.rank.toFixed(1)}위`, good: Math.abs(dRk) < 0.2 ? 0 : dRk < 0 ? 1 : -1 });
+        if (a.imp && b.imp) chips.push({ t: `CTR ${fmtP2(b.ctr)}→${fmtP2(a.ctr)}`, good: Math.abs(dCtr) < 0.1 ? 0 : dCtr > 0 ? 1 : -1 });
+        const cvrOk = a.conv >= 20 && b.conv >= 20 && !(shifts.has(media) && shifts.get(media).d > cs && shifts.get(media).d <= e);
+        if (cvrOk) chips.push({ t: `CVR ${fmtP2(b.cvr)}→${fmtP2(a.cvr)}`, good: Math.abs(dCvr) < 0.1 ? 0 : dCvr > 0 ? 1 : -1 });
+        chips.push({ t: `ROAS ${fmtR(b.roas)}→${fmtR(a.roas)}`, good: Math.abs(rel(a.roas, b.roas)) < 0.1 ? 0 : a.roas > b.roas ? 1 : -1 });
+        // 1) 클릭 단가
+        if (a.clk >= 50 && b.clk >= 50 && Math.abs(dCpc) >= 0.1) {
+          if (search) {
+            if (dCpc > 0 && dRk >= -0.2) { why.push(`CPC가 ${pcs(a.cpc, b.cpc)} 올랐는데 노출순위는 ${b.rank.toFixed(1)}→${a.rank.toFixed(1)}위로 ${dRk > 0.2 ? '오히려 밀렸어요' : '그대로예요'}. 같은 자리를 지키는 데 돈이 더 드는 상황이라 키워드 경쟁이 심해진 걸로 보여요.`); act.push('주요 키워드 입찰가와 순위를 확인하고, 순위 대비 전환이 낮은 키워드는 입찰을 낮추세요'); }
+            else if (dCpc > 0) { why.push(`입찰을 올려 노출순위를 ${b.rank.toFixed(1)}→${a.rank.toFixed(1)}위로 끌어올리면서 CPC가 ${pcs(a.cpc, b.cpc)} 올랐어요.`); act.push(dCtr > 0.05 ? `순위가 오르며 CTR도 ${pcs(a.ctr, b.ctr)} 좋아졌어요. 전환까지 늘었는지 확인하세요` : '순위는 올랐는데 CTR이 거의 그대로라, 올린 입찰만큼 효과가 있는지 점검하세요'); }
+            else if (dRk > 0.2) { why.push(`CPC가 ${pcs(a.cpc, b.cpc)} 내려갔지만 노출순위가 ${b.rank.toFixed(1)}→${a.rank.toFixed(1)}위로 밀렸어요. 아래 자리로 내려가 단가가 싸진 거라 효율 개선으로 보긴 어려워요.`); act.push('순위 하락으로 클릭·매출이 줄었는지 보고 핵심 키워드는 입찰을 다시 올리세요'); }
+            else { why.push(`노출순위를 ${b.rank.toFixed(1)}→${a.rank.toFixed(1)}위로 유지하면서 CPC가 ${pcs(a.cpc, b.cpc)} 내려갔어요. 경쟁이 완화됐거나 품질지수가 좋아진 신호예요.`); act.push('남는 예산을 전환 좋은 키워드에 더 써도 돼요'); }
+          } else if (dCpc > 0) {
+            if (dCtr <= -0.1) { why.push(`CTR이 ${fmtP2(b.ctr)}→${fmtP2(a.ctr)}로 떨어지면서 클릭 하나 얻는 비용(CPC ${pcs(a.cpc, b.cpc)})이 올랐어요. ${sLike ? '광고 문구·혜택 반응이 약해진' : '소재 반응이 약해진(피로도)'} 신호예요.`); act.push(sLike ? '광고 문구에 현재 혜택·가격을 넣어 갱신하세요' : '노출이 오래된 소재를 교체하거나 새 소재를 테스트하세요'); }
+            else if (dCpm >= 0.1) { why.push(`CTR은 비슷한데 노출 단가(CPM)가 ${pcs(a.cpm, b.cpm)} 올라 CPC가 ${pcs(a.cpc, b.cpc)} 올랐어요. 시즌이나 경쟁사 집행으로 경매 경쟁이 심해진 걸로 보여요.`); act.push('타겟을 좁히거나 효율 낮은 지면·시간대를 줄이세요'); }
+          } else {
+            if (dCtr >= 0.1) { why.push(`CTR이 ${fmtP2(b.ctr)}→${fmtP2(a.ctr)}로 좋아져 CPC가 ${pcs(a.cpc, b.cpc)} 내려갔어요. 소재 반응이 좋아졌어요.`); act.push('반응 좋은 소재에 예산을 더 실어보세요'); }
+            else if (dCpm <= -0.1) { why.push(`노출 단가(CPM)가 ${pcs(a.cpm, b.cpm)} 내려가 CPC도 ${pcs(a.cpc, b.cpc)} 내려갔어요. 경매 경쟁이 완화된 구간이에요.`); act.push('단가가 낮은 지금 노출을 늘려볼 만해요'); }
+          }
+        }
+        // 1-2) CPC는 그대로인데 CTR이나 순위만 크게 바뀐 경우
+        const cpcSaid = why.length > 0;
+        if (!cpcSaid && a.imp >= 1000 && b.imp >= 1000 && Math.abs(dCtr) >= 0.15) {
+          if (search && Math.abs(dRk) >= 0.3 && (dRk < 0) === (dCtr > 0)) why.push(`노출순위가 ${b.rank.toFixed(1)}→${a.rank.toFixed(1)}위로 ${dRk < 0 ? '올라' : '밀려'} CTR이 ${fmtP2(b.ctr)}→${fmtP2(a.ctr)}로 ${dCtr > 0 ? '좋아졌어요' : '떨어졌어요'}.`);
+          else if (search && dRk <= -0.3 && dCtr < 0) { why.push(`노출순위는 ${b.rank.toFixed(1)}→${a.rank.toFixed(1)}위로 올랐는데 CTR은 ${fmtP2(b.ctr)}→${fmtP2(a.ctr)}로 떨어졌어요. 노출이 클릭률 낮은 키워드 쪽으로 넓어진 걸로 보여요.`); act.push('노출이 많이 늘어난 키워드의 클릭·전환을 확인하세요'); }
+          else if (dCtr < 0) { why.push(`CTR이 ${fmtP2(b.ctr)}→${fmtP2(a.ctr)}(${pcs(a.ctr, b.ctr)})로 떨어졌어요. ${sLike ? '검색어 대비 광고 문구·혜택 매력이 약해진' : '같은 사람에게 같은 소재가 반복 노출되는 피로도'} 신호예요.`); act.push(sLike ? '광고 문구에 현재 혜택·가격을 넣어 갱신하세요' : '노출이 오래된 소재를 교체하거나 새 소재를 테스트하세요'); }
+          else { why.push(`CTR이 ${fmtP2(b.ctr)}→${fmtP2(a.ctr)}(${pcs(a.ctr, b.ctr)})로 좋아졌어요. ${sLike ? '광고 문구·혜택' : '소재'} 반응이 좋아졌어요.`); act.push(sLike ? '반응 좋은 문구를 다른 그룹에도 적용해 보세요' : '반응 좋은 소재에 예산을 더 실어보세요'); }
+        } else if (!cpcSaid && search && Math.abs(dRk) >= 0.4) { why.push(`CPC는 비슷한데 노출순위가 ${b.rank.toFixed(1)}→${a.rank.toFixed(1)}위로 ${dRk < 0 ? '올랐어요. 경쟁사 입찰이 줄었거나 품질지수가 좋아진' : '밀렸어요. 경쟁사가 입찰을 올린'} 신호예요.`); if (dRk > 0) act.push('핵심 키워드 순위를 확인하고 필요하면 입찰을 올리세요'); }
+        // 2) 전환율
+        if (cvrOk && Math.abs(dCvr) >= 0.12) {
+          const evB = promoAt(cs, ce, land), evA = promoAt(s, e, land); const nm = (x) => x.name;
+          const ended = evB.filter((x) => x.end < s && !evA.includes(x)), started = evA.filter((x) => x.start > ce && !evB.includes(x));
+          if (dCvr < 0) {
+            if (ended.length) { why.push(`전환율이 ${fmtP2(b.cvr)}→${fmtP2(a.cvr)}로 떨어졌어요. 비교 기간에 있던 ${ended.slice(0, 2).map(nm).join('·')}${jo(ended.slice(0, 2).map(nm).join('·'), '이', '가')} 끝나 구매 이유가 약해진 영향으로 보여요.`); act.push('다음 행사 전까지는 입찰·예산을 낮춰 효율을 지키세요'); }
+            else if (a.clk / b.clk >= 1.2 || dCtr >= 0.1) { why.push(`클릭은 ${pcs(a.clk, b.clk)} 늘었는데 전환율이 ${fmtP2(b.cvr)}→${fmtP2(a.cvr)}로 떨어졌어요. 유입이 넓어지며 구매 의향이 낮은 사람이 늘어난(유입 질 하락) 걸로 보여요.`); act.push('새로 늘어난 키워드·타겟의 전환을 확인하고 안 되는 쪽은 줄이세요'); }
+            else { why.push(`유입은 비슷한데 전환율이 ${fmtP2(b.cvr)}→${fmtP2(a.cvr)}로 떨어졌어요. 광고보다는 랜딩·가격·품절 같은 구매 단계 문제일 가능성이 커요.`); act.push(`${land || '랜딩'} 상품 페이지 가격·혜택·품절 여부를 확인하세요`); }
+          } else {
+            if (started.length) why.push(`${started.slice(0, 2).map(nm).join('·')} 시작으로 전환율이 ${fmtP2(b.cvr)}→${fmtP2(a.cvr)}로 올랐어요.`);
+            else why.push(`전환율이 ${fmtP2(b.cvr)}→${fmtP2(a.cvr)}로 좋아졌어요. 같은 클릭에서 구매가 더 나오고 있어요.`);
+            act.push('전환이 좋은 지금 예산을 늘려볼 만해요');
+          }
+        }
+        // 3) 객단가
+        if (a.conv >= 20 && b.conv >= 20 && Math.abs(dAov) >= 0.15) why.push(`객단가가 ${compact(b.aov)}→${compact(a.aov)}원(${pcs(a.aov, b.aov)})으로 ${dAov > 0 ? '올라 고가 구성(다박스·세트) 비중이 늘었어요' : '내려 저가 구성 비중이 늘었어요'}.`);
+        // ROAS를 움직인 가장 큰 요인: ROAS = CVR × 객단가 ÷ CPC
+        if (a.roas && b.roas && Math.abs(rel(a.roas, b.roas)) >= 0.1 && a.conv && b.conv) {
+          const parts = [['CPC', -Math.log(a.cpc / b.cpc)], ['전환율', cvrOk ? Math.log(a.cvr / b.cvr) : 0], ['객단가', Math.log(a.aov / b.aov)]].filter((x) => isFinite(x[1]));
+          const top = d3.greatest(parts, (x) => Math.sign(Math.log(a.roas / b.roas)) * x[1]);
+          const tv = top && { CPC: pcs(a.cpc, b.cpc), 전환율: pcs(a.cvr, b.cvr), 객단가: pcs(a.aov, b.aov) }[top[0]];
+          if (top && Math.sign(top[1]) === Math.sign(Math.log(a.roas / b.roas))) why.unshift(`ROAS ${fmtR(b.roas)}→${fmtR(a.roas)}를 가장 크게 움직인 건 ${top[0]}(${tv})${top[0] === '전환율' ? '이에요' : '예요'}.`);
+        }
+        if (why.length) DG.push({ k, chips, why, act: [...new Set(act)].slice(0, 2).join('. ') });
+      });
+    }
+    // 그리기: 데이터 주의 → 핵심 숫자와 원인 → 날짜별 원인 표 → 참고(접힘)
+    const dtl = (sum, txt, open) => { const d = el('details'); if (open) d.open = true; d.append(el('summary', '', sum)); if (txt) d.append(el('p', '', txt)); return d; };
+    const cards = (list) => { const g = el('div', 'ins-sum'); list.forEach((x) => { const c = el('div', 'ins-kpi'); c.append(el('div', 'k', x.k), el('div', 'v', x.v)); if (x.chg) c.append(el('div', 'chg ' + cls(x.good), x.chg)); if (x.cause) { const cc = el('div', 'c'); cc.append(x.k === sLab || x.k === '광고 매출' ? '원인: ' : '', el('b', '', x.cause)); c.append(cc); } if (x.txt) c.append(dtl('근거 보기', x.txt)); g.append(c); }); return g; };
+    const dayTable = (title, list) => { if (!list.length) return; list = [...list]; ul.append(el('h3', 'ins-sub', `${title} (${list.length})`));
+      const tw = el('div', 'lx-tw'), t = el('table', 'lx-t ins-t'); head(t, ['주 (월~일)', '무엇이 바뀌었나', '원인 (눌러서 근거 보기)', '할 일']); const tb = el('tbody');
+      list.sort((a, b) => d3.ascending(a.d, b.d)).forEach((r) => {
+        const tr = el('tr'); tr.append(el('td', 'l nowrap', r.rg)); const c1 = el('td', 'l'); r.chg.forEach((x) => c1.append(el('span', 'ins-chip ' + cls(x.good), x.t))); c1.append(el('div', 'lx-note', r.basis)); tr.append(c1);
+        const c2 = el('td', 'l'); c2.append(dtl(r.cause || '뚜렷한 원인을 못 찾았어요', r.txt)); tr.append(c2); tr.append(el('td', 'l ins-act', r.act || '')); tb.append(tr);
+      }); t.append(tb); tw.append(t); ul.append(tw); };
+    // 1) 실매출
+    if (BX.ssum.length) {
+      ul.append(el('h3', 'ins-sec', `실매출 (${chLab()})`)); if (chMissing().length) ul.append(el('p', 'lx-note', chMissing().map((ch) => `${ch} 실매출은 ${covTxt(ch)}만 있어서 이 기간에는 빠졌어요.`).join(' ')));
+      ul.append(cards(BX.ssum));
+      if (BX.sbrk.length) { const bx = el('div', 'ins-brk'); bx.append(el('div', 'ins-h2', `무엇이 실매출을 움직였나 (${cname} 대비)`)); BX.sbrk.forEach(([n, l]) => { const row = el('div', 'ins-brow'); row.append(el('span', 'n', n)); const v = el('span', 'v'); l.forEach(([k, d]) => v.append(el('span', 'ins-chip ' + cls(sg(d)), `${k} ${won(d)}`))); row.append(v); bx.append(row); }); ul.append(bx); }
+      dayTable('실매출 주별 변동과 원인', WK.srows);
+    } else ul.append(el('p', 'lx-note', '선택 기간에 실매출 데이터가 없어요. ' + allCh().map((ch) => `${ch}: ${covTxt(ch) || '전체'}`).join(' / ')));
+    // 2) 광고
+    ul.append(el('h3', 'ins-sec', '광고'));
+    if (dq.length) { const w = el('div', 'ins-warn'); w.append(el('div', 'ins-h', `광고 데이터 주의 ${dq.length}건 · 원인 분석에서는 걸러냈어요`)); dq.forEach(([h, t]) => w.append(dtl(h, t))); ul.append(w); }
+    if (BX.sum.length) ul.append(cards(BX.sum));
+    if (DG.length) { ul.append(el('h3', 'ins-sub', `핵심 진단: 지표가 왜 바뀌었나 (${cname} 대비)`));
+      const tw = el('div', 'lx-tw'), t = el('table', 'lx-t ins-t'); head(t, ['매체·유형', '지표 변화', '진단', '할 일']); const tb = el('tbody');
+      DG.forEach((r) => { const tr = el('tr'); tr.append(el('td', 'l nowrap', r.k)); const c1 = el('td', 'l'); r.chips.forEach((x) => c1.append(el('span', 'ins-chip ' + cls(x.good), x.t))); tr.append(c1);
+        const c2 = el('td', 'l'); r.why.forEach((w, i) => c2.append(i ? el('div', 'lx-note', w) : el('div', '', w))); tr.append(c2); tr.append(el('td', 'l ins-act', r.act)); tb.append(tr); });
+      t.append(tb); tw.append(t); ul.append(tw); }
+    dayTable('광고 주별 변동과 원인', WK.rows);
+    if (CK.length) { ul.append(el('h3', 'ins-sub', `추가로 볼 것: 자동 점검 (${CK.length})`));
+      const tw = el('div', 'lx-tw'), t = el('table', 'lx-t ins-t'); head(t, ['점검', '대상', '발견', '할 일']); const tb = el('tbody');
+      CK.forEach((r) => { const tr = el('tr'); tr.append(el('td', 'l nowrap', r.c), el('td', 'l', r.t), el('td', 'l', r.fd), el('td', 'l ins-act', r.a)); tb.append(tr); });
+      t.append(tb); tw.append(t); ul.append(tw); }
+    if (BX.more.length) { const d = el('details', 'ins-more'); d.append(el('summary', '', `참고: 행사·공구·주차·요일 (${BX.more.length})`)); const u2 = el('ul', 'lx-ins'); BX.more.forEach((m) => { const li = el('li'); li.append(el('span', 'tag', m.tag)); const sp = el('span', '', m.txt); if (m.cf) sp.append(el('span', 'cf', '(' + m.cf + ')')); li.append(sp); u2.append(li); }); d.append(u2); ul.append(d); }
+
+    // heat: 주 × 요일 ROAS
+    const cell = new Map(d3.rollups(rows, agg, (r) => mondayOf(r.t) + '|' + wdi(r.t)));
+    const hh = el('thead'); const h1 = el('tr'); h1.append(el('th', 'l', '주')); WDN.forEach((n) => h1.append(el('th', '', n))); h1.append(el('th', '', '주 전체')); hh.append(h1); tH.append(hh);
+    const bh = el('tbody');
+    weeks.forEach((x) => {
+      const tr = el('tr'); tr.append(el('td', 'l', wl(x.w)));
+      for (let i = 0; i < 7; i++) {
+        const c = cell.get(x.w + '|' + i); const td = el('td', 'h', c && c.cost ? fmtR(c.roas) : '');
+        if (c && c.cost) { const dv = Math.max(-1, Math.min(1, (c.roas - x.roas) / (x.roas || 1))); const pct = Math.round(Math.abs(dv) * 45); td.style.background = `color-mix(in srgb, ${dv >= 0 ? 'var(--lx-acc)' : 'var(--color-bad)'} ${pct}%, transparent)`; td.title = `매출 ${fmtN(c.rev)}원 · 비용 ${fmtN(c.cost)}원`; }
+        tr.append(td);
+      }
+      tr.append(tdN(fmtR(x.roas))); bh.append(tr);
+    });
+    tH.append(bh);
+  };
+
+  const draw = (cube) => {
+    const all = prep(cube.data);
+    if (!maxDay && all.length) { maxDay = d3.max(all, (r) => r.day); minDay = d3.min(all, (r) => r.day); if (!P().start) { setDefaults(); return; } }
+    drawControls(all);
+    const [s, e] = range(); if (!s) return;
+    const [cs, ce, cname] = cmpRange(s, e);
+    const f = dimFilter(all);
+    const curR = inRange(f, s, e), prevR = inRange(f, cs, ce);
+    const A = agg(curR), B = agg(prevR);
+
+    // ---------- 요일·주차 분석 (캠페인 탭 제외, 모든 탭 맨 아래) ----------
+    if (cur !== 'campaign') drawDow(f, s, e, cs, ce, cname);
+
+    // takeaway
+    const tk = document.getElementById('takeaway'); tk.classList.remove('dash-skeleton');
+    const mA = byKey(curR, (r) => r.media), mB = byKey(prevR, (r) => r.media);
+    let big = null; [...new Set([...mA.keys(), ...mB.keys()])].forEach((k) => { const dv = (mA.get(k)?.rev || 0) - (mB.get(k)?.rev || 0); if (!big || Math.abs(dv) > Math.abs(big[1])) big = [k, dv]; });
+    const dr = delta('rev', A.rev, B.rev), dro = delta('roas', A.roas, B.roas);
+    tk.textContent = `${short(s)}~${short(e)} 매출액 ${compact(A.rev)}원, ROAS ${fmtR(A.roas)}로 ${cname}(${short(cs)}~${short(ce)}) 대비 매출 ${dr.txt}, ROAS ${dro.txt}.` + (big ? ` 매출 변화가 가장 큰 매체는 ${big[0]}(${big[1] >= 0 ? '+' : '−'}${compact(Math.abs(big[1]))}원)예요.` : '');
+
+    if (cur === 'summary') {
+      const kb = document.getElementById('kpis'); kb.replaceChildren();
+      kpiDefs.forEach(([k, n]) => {
+        const c = el('div', 'lx-kpi'); c.id = 'kpi-' + k;
+        const fm = COLS.find((x) => x[0] === k)[2]; const d = delta(k, A[k], B[k]);
+        c.append(el('div', 'k', n + ' · ' + short(s) + '~' + short(e)), el('div', 'v', fm(A[k])), el('div', 'd ' + cls(d.good), d.txt + ' vs ' + cname));
+        kb.append(c);
+      });
+      const sr0 = salesRowsE(); const off = el('div', 'lx-kpi'); off.id = 'kpi-real';
+      if (sr0.length) {
+        const smax = d3.max(sr0, (r) => r.day); const e2 = e > smax ? smax : e; const pr = new Set(P().product || []);
+        const sx = s <= e2 ? sagg(sr0.filter((r) => r.day >= s && r.day <= e2 && (!pr.size || pr.has(r.group)))) : null;
+        const adc = s <= e2 ? agg(inRange(f, s, e2)).cost : 0;
+        off.append(el('div', 'k', '실매출(' + chLab() + ') · ' + (sx ? short(s) + '~' + short(e2) : '')), el('div', 'v', sx ? fmtN(sx.rev) : '–'), el('div', 'd nt', sx ? 'MER ' + fmtR(adc ? sx.rev / adc : 0) + (e > smax ? ' · ' + short(smax) + '까지' : '') : '실매출은 ' + short(smax) + '까지 있어요'));
+      } else { off.className = 'lx-kpi lx-off'; off.append(el('div', 'k', '실매출 · MER'), el('div', 'v', '불러오는 중'), el('div', 'd nt', '')); }
+      kb.append(off);
+      const days = d3.rollups(curR, agg, (r) => r.day).sort((a, b) => d3.ascending(a[0], b[0])).map(([day, v]) => ({ day, ...v }));
+      const boxD = document.getElementById('ch-daily'), boxR = document.getElementById('ch-roas');
+      if (days.length) {
+        barChart(boxD, days, [{ key: 'rev', color: dash.colors[0] }, { key: 'cost', color: 'var(--cds-chart-muted)' }],
+          { x: lab, lines: (d) => [swatchLine(dash.colors[0], '매출액', fmtN(d.rev) + '원'), swatchLine('var(--cds-chart-muted)', '총비용', fmtN(d.cost) + '원'), el('div', 'h', 'ROAS ' + fmtR(d.roas))] });
+        lineChart(boxR, days, 'roas', B.cost ? B.roas : null, fmtR);
+      } else { boxD.replaceChildren(el('p', 'lx-note', '선택한 조건에 데이터가 없어요.')); boxR.replaceChildren(); }
+      const groups = [...mA.keys()].sort((a, b) => (mA.get(b).cost - mA.get(a).cost));
+      const t = document.getElementById('t-media-sum'); cmpTable(t, groups, mA, mB, '매체');
+      const tf = el('tbody'); const tr = el('tr', 'tot'); tr.append(el('td', 'l', '합계'));
+      [fmtN(A.cost), '100%', fmtN(A.conv), fmtN(A.rev), fmtR(A.roas), fmtN(A.cpa), fmtP2(A.cvr)].forEach((v) => tr.append(tdN(v)));
+      [['rev', A.rev, B.rev], ['roas', A.roas, B.roas], ['cost', A.cost, B.cost]].forEach(([k, x, y]) => { const d = delta(k, x, y); tr.append(tdN(d.txt, cls(d.good))); });
+      tf.append(tr); t.append(tf);
+      const SS = salesIn(s, e);
+      const td = document.getElementById('t-day'); td.replaceChildren(); head(td, ['날짜', ...COLS.map((c) => c[1]), '실매출', 'MER']);
+      const tbd = el('tbody'); days.forEach((d) => { const tr = el('tr'); tr.append(el('td', 'l', lab(d.day))); COLS.forEach(([k, , fm]) => tr.append(tdN(fm(d[k])))); salesCells(SS, SS && (SS.byDay.get(d.day) || 0), d.cost, SS && SS.has(d.day)).forEach((v) => tr.append(tdN(v)));
+        tbd.append(tr); });
+      const trt = el('tr', 'tot'); trt.append(el('td', 'l', 'Total')); COLS.forEach(([k, , fm]) => trt.append(tdN(fm(A[k]))));
+      if (SS) { const ok = days.filter((d) => SS.has(d.day)); const sv = d3.sum(ok, (d) => SS.byDay.get(d.day) || 0), sc = d3.sum(ok, (d) => d.cost); salesCells(SS, sv, sc, ok.length).forEach((v) => trt.append(tdN(v))); } else trt.append(tdN(''), tdN(''));
+      tbd.append(trt); td.append(tbd);
+      document.getElementById('media-sum-note').textContent = `${short(s)}~${short(e)} vs ${cname}(${short(cs)}~${short(ce)}). ROAS 비교는 %p 차이, 나머지는 증감률.`;
+    }
+
+    if (cur === 'media') {
+      const t = document.getElementById('t-media'); t.replaceChildren();
+      head(t, ['매체 > 캠페인유형', ...COLS.map((c) => c[1]), '매출 비교', 'ROAS 비교', '비용 비교']);
+      const tb = el('tbody');
+      const addRow = (name, a, b, c) => {
+        const tr = el('tr', c); tr.append(el('td', 'l', name)); COLS.forEach(([k, , fm]) => tr.append(tdN(fm(a[k]))));
+        [['rev', a.rev, b.rev], ['roas', a.roas, b.roas], ['cost', a.cost, b.cost]].forEach(([k, x, y]) => { const d = b.cost || b.rev ? delta(k, x, y) : { txt: '신규', good: 0 }; tr.append(tdN(d.txt, cls(d.good))); });
+        tb.append(tr);
+      };
+      d3.groups(curR, (r) => r.media).map(([k, v]) => [k, v, agg(v)]).sort((a, b) => b[2].cost - a[2].cost).forEach(([m, v, a]) => {
+        const pv = prevR.filter((r) => r.media === m); addRow(m, a, agg(pv), 'grp');
+        d3.groups(v, (r) => r.ctype).map(([k, vv]) => [k, agg(vv)]).sort((x, y) => y[1].cost - x[1].cost).forEach(([ct, aa]) => addRow(ct, aa, agg(pv.filter((r) => r.ctype === ct)), 'sub'));
+      });
+      addRow('합계', A, B, 'tot'); t.append(tb);
+      [['owner', 't-owner', '관리'], ['landing', 't-landing', '랜딩'], ['device', 't-device', '디바이스'], ['goal', 't-goal', '목표']].forEach(([k, id, n]) => {
+        const a = byKey(curR, (r) => r[k]), b = byKey(prevR, (r) => r[k]);
+        cmpTable(document.getElementById(id), [...a.keys()].sort((x, y) => a.get(y).cost - a.get(x).cost), a, b, n);
+      });
+    }
+
+    if (cur === 'product') {
+      const a = byKey(curR, (r) => r.product), b = byKey(prevR, (r) => r.product);
+      const keys = [...a.keys()].sort((x, y) => a.get(y).rev - a.get(x).rev);
+      const t = document.getElementById('t-product'); t.replaceChildren();
+      head(t, ['제품', '매출액', '총비용', 'ROAS', '전환', 'CPA', 'AOV', 'CVR', '실매출', 'MER', '매출 비교', 'ROAS 비교', '비용 비교']);
+      const tb = el('tbody'); const mx = d3.max(keys, (k) => a.get(k).rev) || 1;
+      const SS = salesIn(s, e); const sOk = SS && SS.covers; const sCost = sOk ? null : (SS ? byKey(curR.filter((r) => SS.has(r.day)), (r) => r.product) : null);
+      document.getElementById('product-note').textContent = '매출액 내림차순. 막대는 매출액 크기. 행을 누르면 그 제품만 골라져요. 실매출·MER은 ' + chLab() + ' 실매출 제품군 기준이라 이름이 같은 제품에만 나와요' + (SS && !SS.covers ? ` (실매출은 ${short(SS.smax)}까지라 그 날짜까지의 광고비로 MER을 계산했어요)` : '') + '.';
+      keys.forEach((k) => {
+        const x = a.get(k), y = b.get(k) || agg([]); const tr = el('tr'); tr.append(el('td', 'l', k));
+        const tdr = tdN(fmtN(x.rev)); const bar = el('span', 'lx-bar'); bar.style.width = Math.round(60 * x.rev / mx) + 'px'; tdr.append(bar); tr.append(tdr);
+        [fmtN(x.cost), fmtR(x.roas), fmtN(x.conv), fmtN(x.cpa), fmtN(x.aov), fmtP2(x.cvr)].forEach((v) => tr.append(tdN(v)));
+        const gk = k.trim(); const hasG = SS && SS.rows.length && salesRowsE().some((r) => r.group === gk);
+        const co = sOk ? x.cost : (sCost && sCost.get(k) ? sCost.get(k).cost : 0);
+        salesCells(SS, SS ? SS.byGroup.get(gk) || 0 : 0, co, hasG).forEach((v) => tr.append(tdN(v)));
+        [['rev', x.rev, y.rev], ['roas', x.roas, y.roas], ['cost', x.cost, y.cost]].forEach(([kk, p, q]) => { const d = y.cost || y.rev ? delta(kk, p, q) : { txt: '신규', good: 0 }; tr.append(tdN(d.txt, cls(d.good))); });
+        tr.dataset.key = k; tb.append(tr);
+      });
+      t.append(tb);
+      // product x media
+      const meds = d3.rollups(curR, (v) => d3.sum(v, (r) => r.cost), (r) => r.media).sort((x, y) => y[1] - x[1]).map((x) => x[0]);
+      const pm = new Map(d3.rollups(curR, agg, (r) => r.product + '\u0001' + r.media));
+      const tx = document.getElementById('t-pxm'); tx.replaceChildren();
+      const h1 = el('tr'); h1.append(el('th', 'l', '제품')); meds.forEach((m) => { h1.append(el('th', '', m + ' 매출액'), el('th', '', m + ' ROAS')); }); const thx = el('thead'); thx.append(h1); tx.append(thx);
+      const tbx = el('tbody');
+      keys.forEach((k) => { const tr = el('tr'); tr.append(el('td', 'l', k)); meds.forEach((m) => { const v = pm.get(k + '\u0001' + m); tr.append(tdN(v && v.cost ? fmtN(v.rev) : ''), tdN(v && v.cost ? fmtR(v.roas) : '')); }); tbx.append(tr); });
+      tx.append(tbx);
+      // single-product daily
+      const sel = P().product || []; const tp = document.getElementById('t-pday'); tp.replaceChildren();
+      if (sel.length === 1) {
+        document.getElementById('pday-title').textContent = sel[0] + ' 일자별 요약';
+        document.getElementById('pday-note').textContent = `${short(s)}~${short(e)}, 다른 슬라이서 조건 포함.`;
+        const pd = d3.rollups(curR, agg, (r) => r.day).sort((x, y) => d3.ascending(x[0], y[0]));
+        const SS = salesIn(s, e);
+        head(tp, ['날짜', ...COLS.map((c) => c[1]), '실매출', 'MER']); const tbp = el('tbody');
+        pd.forEach(([d, v]) => { const tr = el('tr'); tr.append(el('td', 'l', lab(d))); COLS.forEach(([kk, , fm]) => tr.append(tdN(fm(v[kk])))); salesCells(SS, SS && (SS.byDay.get(d) || 0), v.cost, SS && SS.has(d)).forEach((x) => tr.append(tdN(x))); tbp.append(tr); });
+        const tt = el('tr', 'tot'); tt.append(el('td', 'l', 'Total')); COLS.forEach(([kk, , fm]) => tt.append(tdN(fm(A[kk]))));
+        if (SS) { const ok = pd.filter(([d]) => SS.has(d)); salesCells(SS, d3.sum(ok, ([d]) => SS.byDay.get(d) || 0), d3.sum(ok, ([, v]) => v.cost), ok.length).forEach((x) => tt.append(tdN(x))); } else tt.append(tdN(''), tdN(''));
+        tbp.append(tt); tp.append(tbp);
+      } else {
+        document.getElementById('pday-title').textContent = '제품 일자별 요약';
+        document.getElementById('pday-note').textContent = '제품 슬라이서에서 제품을 하나 고르거나 위 표의 행을 누르면 그 제품의 일자별 표가 나와요.';
+      }
+    }
+
+    if (cur === 'sales') {
+      const sr = salesRowsE(); const kb = document.getElementById('sales-kpis');
+      if (!sr.length) { kb.replaceChildren(el('p', 'lx-note', '실매출 데이터를 불러오는 중이에요.')); return; }
+      const smax = d3.max(sr, (r) => r.day), smin = d3.min(sr, (r) => r.day);
+      const e2 = e > smax ? smax : e; const s2 = s < smin ? smin : s;
+      const note = document.getElementById('sales-range-note');
+      drawPromo(f, salesRows().filter((r) => r.channel === '공식몰'), smin, smax);
+      if (s2 > e2) {
+        note.textContent = `실매출은 ${smin}~${smax}까지 있어요. 선택 기간(${short(s)}~${short(e)})에는 실매출이 없어요.`;
+        const b = el('button', 'lx-btn', '실매출 있는 마지막 7일 보기'); b.type = 'button'; b.id = 'sales-jump';
+        b.addEventListener('click', () => dash.setParams({ start: iso(parse(smax) - 6 * DAY), end: smax, pyear: [], pmonth: [], pweek: [] }));
+        kb.replaceChildren(b); ['t-sales-group', 't-sales-box', 't-sales-promo', 't-sales-items'].forEach((id) => document.getElementById(id).replaceChildren()); document.getElementById('ch-sales').replaceChildren();
+        return;
+      }
+      note.textContent = `${chLab()} 상품별 일별 실매출(공식몰은 카페24 판매금액, 네이버는 스마트스토어 판매금액(순)). ${short(s2)}~${short(e2)} 기준` + (chMissing().length ? ` · ${chMissing().map((ch) => ch + '은 ' + covTxt(ch) + '만 있어서 빠짐').join(', ')}` : '') + (e > smax ? ` (실매출은 ${short(smax)}까지라 그 뒤 날짜는 빠졌어요)` : '') + '. 위쪽 기간·제품 슬라이서도 같이 적용돼요.';
+      const p = P(); const prodSel = new Set(p.product || []); const sb = new Set(p.sbox || []), sk = new Set(p.skind || []), sp2 = new Set(p.spromo || []);
+      const sf = (rows) => rows.filter((r) => (!prodSel.size || prodSel.has(r.group)) && (!sb.size || sb.has(r.box)) && (!sk.size || sk.has(r.kind)) && (!sp2.size || sp2.has(r.promo)));
+      const [cs2, ce2, cn2] = cmpRange(s2, e2);
+      const SR = sf(sr.filter((r) => r.day >= s2 && r.day <= e2)), SP = sf(sr.filter((r) => r.day >= cs2 && r.day <= ce2));
+      const X = sagg(SR), Y = sagg(SP);
+      const adR = inRange(f, s2, e2), adP = inRange(f, cs2, ce2); const AD = agg(adR), ADP = agg(adP);
+      const mer = AD.cost ? X.rev / AD.cost : 0, merP = ADP.cost ? Y.rev / ADP.cost : 0;
+      kb.replaceChildren();
+      const tile = (id, k, v, d) => { const c = el('div', 'lx-kpi'); c.id = id; c.append(el('div', 'k', k), el('div', 'v', v), el('div', 'd ' + cls(d.good), d.txt + ' vs ' + cn2)); kb.append(c); };
+      tile('skpi-rev', '실매출 · ' + short(s2) + '~' + short(e2), fmtN(X.rev), delta('rev', X.rev, Y.rev));
+      tile('skpi-ord', '주문건수', fmtN(X.ord), delta('conv', X.ord, Y.ord));
+      tile('skpi-aov', '객단가', fmtN(X.aov), delta('aov', X.aov, Y.aov));
+      tile('skpi-cvr', '실 전환율 (주문 ÷ 상품 노출)', fmtP2(X.cvr), delta('cvr', X.cvr, Y.cvr));
+      tile('skpi-mer', 'MER (실매출 ÷ 광고비)', fmtR(mer), delta('roas', mer, merP));
+      tile('skpi-pr', '프로모션·공구 비중', fmtP(X.rev ? (X.promo + X.gb) / X.rev : 0), delta('share', X.rev ? (X.promo + X.gb) / X.rev : 0, Y.rev ? (Y.promo + Y.gb) / Y.rev : 0));
+      // daily
+      const sd = new Map(d3.rollups(SR, (v) => d3.sum(v, (r) => r.rev), (r) => r.day)); const ad = new Map(d3.rollups(adR, (v) => d3.sum(v, (r) => r.cost), (r) => r.day));
+      const days = []; for (let t = parse(s2); t <= parse(e2); t += DAY) { const d = iso(t); const rv = sd.get(d) || 0, co = ad.get(d) || 0; days.push({ day: d, rev: rv, cost: co, mer: co ? rv / co : 0 }); }
+      barChart(document.getElementById('ch-sales'), days, [{ key: 'rev', color: dash.colors[0] }, { key: 'cost', color: 'var(--cds-chart-muted)' }],
+        { x: lab, lines: (d) => [swatchLine(dash.colors[0], '실매출', fmtN(d.rev) + '원'), swatchLine('var(--cds-chart-muted)', '광고비', fmtN(d.cost) + '원'), el('div', 'h', 'MER ' + fmtR(d.mer))] });
+      // group table
+      const gS = new Map(d3.rollups(SR, sagg, (r) => r.group)), gP = new Map(d3.rollups(SP, sagg, (r) => r.group)), gA = new Map(d3.rollups(adR, agg, (r) => r.product));
+      const tg = document.getElementById('t-sales-group'); tg.replaceChildren();
+      head(tg, ['제품군', '실매출', '비중', '주문건수', '객단가', '프로모션·공구 비중', '광고비', '광고 매출', 'ROAS', 'MER', '실매출 비교']);
+      const tbg = el('tbody');
+      [...gS.keys()].sort((a, b) => gS.get(b).rev - gS.get(a).rev).forEach((k) => {
+        const x = gS.get(k), y = gP.get(k), a = gA.get(k) || agg([]); const tr = el('tr'); tr.dataset.key = k; tr.append(el('td', 'l', k));
+        [fmtN(x.rev), X.rev ? fmtP(x.rev / X.rev) : '–', fmtN(x.ord), fmtN(x.aov), x.rev ? fmtP((x.promo + x.gb) / x.rev) : '–', a.cost ? fmtN(a.cost) : '', a.cost ? fmtN(a.rev) : '', a.cost ? fmtR(a.roas) : '', a.cost ? fmtR(x.rev / a.cost) : ''].forEach((v) => tr.append(tdN(v)));
+        const d = y && y.rev ? delta('rev', x.rev, y.rev) : { txt: '신규', good: 0 }; tr.append(tdN(d.txt, cls(d.good))); tbg.append(tr);
+      });
+      const tt = el('tr', 'tot'); tt.append(el('td', 'l', '합계'));
+      [fmtN(X.rev), '100%', fmtN(X.ord), fmtN(X.aov), X.rev ? fmtP((X.promo + X.gb) / X.rev) : '–', fmtN(AD.cost), fmtN(AD.rev), fmtR(AD.roas), fmtR(mer)].forEach((v) => tt.append(tdN(v)));
+      const dt = delta('rev', X.rev, Y.rev); tt.append(tdN(dt.txt, cls(dt.good))); tbg.append(tt); tg.append(tbg);
+      const SRn = SR.filter((r) => +r.rev > 0 || +r.ord > 0);
+      // group x box
+      const tbx = document.getElementById('t-sales-box'); tbx.replaceChildren();
+      head(tbx, ['제품군 > 박스', '실매출', '주문건수', '객단가', '일반', '프로모션', '공구']);
+      const bb = el('tbody');
+      d3.groups(SRn, (r) => r.group).map(([k, v]) => [k, v, sagg(v)]).sort((a, b) => b[2].rev - a[2].rev).slice(0, 12).forEach(([g, v, gx]) => {
+        const r0 = el('tr', 'grp'); r0.append(el('td', 'l', g)); [fmtN(gx.rev), fmtN(gx.ord), fmtN(gx.aov), fmtN(gx.rev - gx.promo - gx.gb), fmtN(gx.promo), fmtN(gx.gb)].forEach((x) => r0.append(tdN(x))); bb.append(r0);
+        d3.groups(v, (r) => r.box).map(([k, vv]) => [k, sagg(vv)]).sort((a, b) => b[1].rev - a[1].rev).forEach(([bx, x]) => { const tr = el('tr', 'sub'); tr.append(el('td', 'l', bx)); [fmtN(x.rev), fmtN(x.ord), fmtN(x.aov), fmtN(x.rev - x.promo - x.gb), fmtN(x.promo), fmtN(x.gb)].forEach((y) => tr.append(tdN(y))); bb.append(tr); });
+      });
+      tbx.append(bb);
+      // promo
+      const tp = document.getElementById('t-sales-promo'); tp.replaceChildren();
+      head(tp, ['프로모션명', '판매유형', '실매출', '주문건수', '객단가', '판매일']);
+      const pb = el('tbody');
+      d3.groups(SRn.filter((r) => r.kind !== '일반'), (r) => r.promo).map(([k, v]) => [k, v, sagg(v)]).sort((a, b) => b[2].rev - a[2].rev).slice(0, 40).forEach(([k, v, x]) => {
+        const tr = el('tr'); tr.append(el('td', 'l', k || '(이름 없음)'), el('td', 'l', v[0].kind)); [fmtN(x.rev), fmtN(x.ord), fmtN(x.aov), short(d3.min(v, (r) => r.day)) + '~' + short(d3.max(v, (r) => r.day))].forEach((y) => tr.append(tdN(y))); pb.append(tr);
+      });
+      tp.append(pb);
+      // items
+      const ti = document.getElementById('t-sales-items'); ti.replaceChildren();
+      head(ti, ['상품명(당일)', '제품군', '박스', '판매유형', '프로모션명', '실매출', '주문건수', '객단가', '전환율']);
+      const ib = el('tbody');
+      d3.groups(SRn, (r) => r.name).map(([k, v]) => [k, v[0], sagg(v)]).sort((a, b) => b[2].rev - a[2].rev).slice(0, 100).forEach(([k, r0, x]) => {
+        const tr = el('tr'); const c = el('td', 'camp', k); c.title = k; tr.append(c, el('td', 'l', r0.group), el('td', 'l', r0.box), el('td', 'l', r0.kind), el('td', 'l', r0.promo));
+        [fmtN(x.rev), fmtN(x.ord), fmtN(x.aov), fmtP2(x.cvr)].forEach((y) => tr.append(tdN(y))); ib.append(tr);
+      });
+      ti.append(ib);
+    }
+
+    if (cur === 'trend') {
+      const endT = parse(e); const monday = (t) => { const d = new Date(t).getUTCDay(); return t - ((d + 6) % 7) * DAY; };
+      const w0 = monday(endT) - 11 * 7 * DAY;
+      const wr = f.filter((r) => r.t >= w0 && r.t <= endT);
+      const weeks = d3.rollups(wr, (v) => ({ ...agg(v), n: new Set(v.map((r) => r.day)).size }), (r) => iso(monday(r.t))).sort((a, b) => d3.ascending(a[0], b[0])).map(([day, v]) => ({ day, ...v }));
+      const wl = (d) => { const t = parse(d); return short(d) + '~' + short(iso(t + 6 * DAY)); };
+      if (weeks.length) barChart(document.getElementById('ch-week'), weeks, [{ key: 'rev', color: dash.colors[0] }, { key: 'cost', color: 'var(--cds-chart-muted)' }],
+        { x: (d) => short(d) + '주', lines: (d) => [swatchLine(dash.colors[0], '매출액', fmtN(d.rev) + '원'), swatchLine('var(--cds-chart-muted)', '총비용', fmtN(d.cost) + '원'), el('div', 'h', 'ROAS ' + fmtR(d.roas) + (d.n < 7 ? ` · ${d.n}일치` : ''))] });
+      const t = document.getElementById('t-week'); t.replaceChildren();
+      head(t, ['주 (월~일)', ...COLS.map((c) => c[1]), 'ROAS 전주비']);
+      const tb = el('tbody');
+      weeks.forEach((w, i) => {
+        const tr = el('tr'); tr.append(el('td', 'l', wl(w.day) + (w.n < 7 ? ` (${w.n}일)` : '')));
+        COLS.forEach(([k, , fm]) => tr.append(tdN(fm(w[k]))));
+        const d = i ? delta('roas', w.roas, weeks[i - 1].roas) : { txt: '–', good: 0 }; tr.append(tdN(d.txt, cls(d.good))); tb.append(tr);
+      });
+      t.append(tb);
+      const mkey = (t) => { const d = new Date(t); return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0'); };
+      const selY = new Set(P().pyear || []);
+      const selM = new Set((P().pmonth || []).length ? P().pmonth : selY.size ? [...new Set(f.filter((r) => selY.has(r.year)).map((r) => r.month))].sort((a, b) => d3.ascending(dayIndex.pmonth.get(a)[0], dayIndex.pmonth.get(b)[0])) : []);
+      const ed = new Date(endT), sd = new Date(parse(s)); const m0 = Math.min(Date.UTC(sd.getUTCFullYear(), sd.getUTCMonth(), 1), Date.UTC(ed.getUTCFullYear(), ed.getUTCMonth() - 2, 1));
+      const mr = selM.size ? f.filter((r) => selM.has(r.month) && r.t <= endT) : f.filter((r) => r.t >= m0 && r.t <= endT);
+      document.getElementById('month-note').textContent = selM.size ? `슬라이서에서 고른 ${selM.size}개월(${[...selM].join('·')})을 모두 보여줘요. 기간 필터의 종료일까지만 더해요.` : '월을 안 고르면 선택 기간이 걸친 월(최소 최근 3개월)을 보여줘요. 슬라이서에서 월을 고르면 고른 월이 모두 나와요. 마지막 달은 종료일까지의 누적이에요.';
+      if (mr.some((r) => r.year === '25년' && r.media === '메타')) document.getElementById('month-note').textContent += ' 25년 메타 클릭은 클릭(전체) 기준이라 26년(링크 클릭)과 CTR·CPC를 바로 비교하기 어려워요.';
+      const tm = document.getElementById('t-month'); tm.replaceChildren();
+      head(tm, ['매체 · 유형 > 월', ...COLS.map((c) => c[1])]);
+      const tbm = el('tbody'); const mlab = (k) => k.slice(2, 4) + '년 ' + Number(k.slice(5)) + '월' + (k === mkey(endT) && mkey(endT + DAY) === k ? ` (~${short(e)})` : '');
+      const mcost = new Map(d3.rollups(mr, (v) => d3.sum(v, (r) => r.cost), (r) => r.media));
+      d3.groups(mr, (r) => r.media + ' · ' + r.ctype).map(([k, v]) => [k, v, agg(v), mcost.get(v[0].media) || 0]).sort((a, b) => b[3] - a[3] || b[2].cost - a[2].cost).forEach(([m, v]) => {
+        const g = el('tr', 'grp'); g.append(el('td', 'l', m)); COLS.forEach(() => g.append(tdN(''))); tbm.append(g);
+        d3.rollups(v, agg, (r) => mkey(r.t)).sort((a, b) => d3.ascending(a[0], b[0])).forEach(([mk, a]) => { const tr = el('tr', 'sub'); tr.append(el('td', 'l', mlab(mk))); COLS.forEach(([k, , fm]) => tr.append(tdN(fm(a[k])))); tbm.append(tr); });
+      });
+      d3.rollups(mr, agg, (r) => mkey(r.t)).sort((a, b) => d3.ascending(a[0], b[0])).forEach(([mk, a], i) => { const tr = el('tr', i ? 'grp' : 'tot'); tr.append(el('td', 'l', '합계 ' + mlab(mk))); COLS.forEach(([k, , fm]) => tr.append(tdN(fm(a[k])))); tbm.append(tr); });
+      tm.append(tbm);
+    }
+
+    if (cur === 'campaign') {
+      const cd = dash.data('camp'); const t = document.getElementById('t-camp');
+      if (cd.status !== 'ok') { t.replaceChildren(); return; }
+      const cr = dimFilter(prep(cd.data)); const cmin = d3.min(cr, (r) => r.day);
+      const rows = inRange(cr, s, e);
+      document.getElementById('camp-note').textContent = `${short(s < cmin ? cmin : s)}~${short(e)} 기준` + (s < cmin ? ` (캠페인 데이터는 ${short(cmin)}부터 있어요)` : '') + `. '전환 0' 표시는 목표가 전환인데 비용 1만원 이상 쓰고 전환이 없는 캠페인이에요.`;
+      const q = campQ.value.trim().toLowerCase();
+      let list = d3.groups(rows, (r) => r.media + '\u0001' + r.campaign).map(([k, v]) => { const a = agg(v); return { media: v[0].media, campaign: v[0].campaign, ctype: v[0].ctype, product: v[0].product, goal: v[0].goal, ...a }; });
+      if (q) list = list.filter((r) => r.campaign.toLowerCase().includes(q) || r.product.toLowerCase().includes(q));
+      const ks = campSort.k; list.sort((a, b) => campSort.dir * (typeof a[ks] === 'string' ? a[ks].localeCompare(b[ks]) : a[ks] - b[ks]));
+      t.replaceChildren();
+      const cols = [['campaign', '캠페인'], ['media', '매체'], ['ctype', '유형'], ['product', '제품'], ['cost', '총비용'], ['clk', '클릭'], ['rank', '노출순위'], ['conv', '전환'], ['rev', '매출액'], ['roas', 'ROAS'], ['cvr', 'CVR'], ['cpa', 'CPA']];
+      const tr0 = el('tr'); cols.forEach(([k, n], i) => { const th = el('th', i < 4 ? 'l' : '', n + (campSort.k === k ? (campSort.dir < 0 ? ' ↓' : ' ↑') : '')); th.setAttribute('aria-sort', campSort.k === k ? (campSort.dir < 0 ? 'descending' : 'ascending') : 'none'); th.tabIndex = 0; th.addEventListener('click', () => { campSort = { k, dir: campSort.k === k ? -campSort.dir : (i < 4 ? 1 : -1) }; redraw(); }); tr0.append(th); });
+      const th = el('thead'); th.append(tr0); t.append(th);
+      const tb = el('tbody');
+      list.slice(0, 400).forEach((r) => {
+        const tr = el('tr'); const c = el('td', 'camp', r.campaign); c.title = r.campaign;
+        if (r.goal === '전환' && r.conv === 0 && r.cost >= 10000) c.append(el('span', 'lx-flag', '전환 0'));
+        tr.append(c, el('td', 'l', r.media), el('td', 'l', r.ctype), el('td', 'l', r.product));
+        [fmtN(r.cost), fmtN(r.clk), fmtRk(r.rank), fmtN(r.conv), fmtN(r.rev), fmtR(r.roas), fmtP2(r.cvr), fmtN(r.cpa)].forEach((v) => tr.append(tdN(v)));
+        tb.append(tr);
+      });
+      t.append(tb);
+    }
+  };
+
+  document.getElementById('top').closest('.lx').style.setProperty('--lx-acc', dash.colors[0]);
+  let linked = false;
+  let joined = null;
+  const joinCube = (a, b) => { if (!joined || joined.a !== a || joined.b !== b) joined = { a, b, v: { status: 'ok', data: a.concat(b) } }; return joined.v; };
+  dash.onData(() => {
+    const c26 = dash.data('cube'), c25 = dash.data('cube25');
+    // 25년(cube25)과 26년(cube)을 합쳐서 쓴다. 25년이 아직 안 왔거나 없으면 26년만.
+    const cube = c26.status === 'ok' && c25.status === 'ok' ? joinCube(c25.data, c26.data) : c26;
+    if (cube.status !== 'ok') {
+      const tk = document.getElementById('takeaway');
+      if (cube.status === 'error') { tk.classList.remove('dash-skeleton'); tk.textContent = '데이터를 불러오지 못했어요.'; }
+      return;
+    }
+    last = cube; draw(cube);
+    if (!linked) { linked = true; const h = location.hash.slice(1); if (pages.includes(h)) show(h); }
+  });
+})();
+</script>
+</div>
+
+<button type="button" id="ai-launch" aria-controls="ai-panel" aria-expanded="false"><span class="dot"></span>AI에게 묻기</button>
+<aside id="ai-panel" hidden aria-label="AI 질문창">
+  <div class="ai-head">
+    <div><h2>AI에게 묻기</h2><p>지금 보고 있는 탭·기간·슬라이서를 알고 답해요. 숫자는 데이터에서 직접 계산해요.</p></div>
+    <button type="button" class="ai-x" id="ai-close">닫기</button>
+  </div>
+  <div class="ai-scroll" id="ai-log-wrap">
+    <div class="facts" id="ai-facts"><span class="fact">데이터 불러오는 중…</span></div>
+    <div class="chips" id="ai-chips"></div>
+    <div id="ai-log"><div class="empty" id="ai-empty">질문하면 여기에 답이 쌓여요. 대화는 이 창에서만 이어지고, 새로고침하면 지워져요.</div></div>
+  </div>
+  <form id="ai-f">
+    <div class="box">
+      <textarea id="ai-q" rows="1" placeholder="예: 이 기간 SSA CPC가 왜 올랐어?" aria-label="질문"></textarea>
+      <button class="btn ghost" type="button" id="ai-stop" hidden>멈춤</button>
+      <button class="btn" type="submit" id="ai-send">묻기</button>
+    </div>
+    <div class="foot"><span id="ai-status">AI 연결 확인 중…</span><button type="button" id="ai-reset">대화 새로 시작</button></div>
+  </form>
+</aside>
+<script>
+(() => {
+  const panel = document.getElementById('ai-panel'), btn = document.getElementById('ai-launch');
+  const set = (open) => { panel.hidden = !open; btn.hidden = open; btn.setAttribute('aria-expanded', String(open)); document.body.classList.toggle('ai-open', open);
+    if (open) setTimeout(() => document.getElementById('ai-q').focus(), 0); dispatchEvent(new Event('resize')); };
+  btn.addEventListener('click', () => set(true));
+  document.getElementById('ai-close').addEventListener('click', () => set(false));
+  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden) set(false); });
+})();
+</script>
+<script>
+(() => {
+const $ = id => document.getElementById('ai-'+id);
+const D = {}; // 데이터
+const NUM = ['imp','clk','cost','conv','rev','rkw','rki'];
+const DOW = ['일','월','화','수','목','금','토'];
+const dowOf = d => DOW[new Date(d+'T00:00:00Z').getUTCDay()];
+const weekOf = d => { const t = new Date(d+'T00:00:00Z'); const k = (t.getUTCDay()+6)%7; t.setUTCDate(t.getUTCDate()-k); return t.toISOString().slice(0,10)+'주'; };
+const r0 = v => Math.round(v);
+const r2 = v => Math.round(v*100)/100;
+const q = (a,b) => b ? a/b : null;
+
+function kstToday(){ return new Date(Date.now()+9*3600e3).toISOString().slice(0,10); }
+
+async function load(){
+  const get = p => window.__csvText(p);
+  const [cube, camp, sales, sprod, scov, promo, cube25] = await Promise.all(
+    ['data/cube.csv','data/camp.csv','data/sales.csv','data/sprod.csv','data/scov.csv','data/promo.csv'].map(get)
+      .concat(get('data/cube25.csv').catch(() => '')));
+  const ad = t => d3.csvParse(t, r => { for (const k of NUM) r[k] = +r[k] || 0; delete r.week; r.month = r.day.slice(0,7); return r; });
+  D.cube = (cube25 ? ad(cube25) : []).concat(ad(cube)); D.camp = ad(camp);
+  D.sprod = new Map(d3.csvParse(sprod).map(p => [p.pid, p]));
+  D.sales = d3.csvParse(sales, r => {
+    const p = D.sprod.get(r.pid) || {};
+    return { day:r.day, month:r.day.slice(0,7), channel:p.channel||'', group:p.group||'미분류', product:p.name||r.pid,
+      promo:p.promo||'', kind:p.kind||'', views:+r.imp||0, cart:+r.cart||0, ord:+r.ord||0, qty:+r.qty||0, rev:+r.rev||0 };
+  });
+  D.scov = d3.csvParse(scov);
+  D.promo = d3.csvParse(promo);
+  const ext = a => d3.extent(a, r => r.day);
+  D.range = { cube: ext(D.cube), camp: ext(D.camp), sales: ext(D.sales) };
+  D.vals = {};
+  for (const k of ['media','ctype','product','owner','goal','landing','device']) D.vals[k] = [...new Set(D.cube.map(r => r[k]))].sort();
+  D.vals.campaign = [...new Set(D.camp.map(r => r.campaign))];
+  D.svals = { channel:[...new Set(D.sales.map(r => r.channel))].filter(Boolean), group:[...new Set(D.sales.map(r => r.group))].sort() };
+}
+
+// ---------- 계산 ----------
+function derive(m){
+  return { imp:r0(m.imp), clk:r0(m.clk), cost:r0(m.cost), conv:r2(m.conv), rev:r0(m.rev),
+    ctr_pct: m.imp ? r2(m.clk/m.imp*100) : null, cpc: m.clk ? r0(m.cost/m.clk) : null,
+    cvr_pct: m.clk ? r2(m.conv/m.clk*100) : null, cpa: m.conv ? r0(m.cost/m.conv) : null,
+    roas_pct: m.cost ? r0(m.rev/m.cost*100) : null, aov: m.conv ? r0(m.rev/m.conv) : null,
+    cpm: m.imp ? r0(m.cost/m.imp*1000) : null, rank: m.rki ? Math.round(m.rkw/m.rki*10)/10 : null };
+}
+function matcher(field, wanted, known, matched){
+  if (!wanted || !wanted.length) return null;
+  const set = new Set();
+  for (const w0 of wanted) { const w = String(w0).trim(); if (!w) continue;
+    if (known.includes(w)) set.add(w); else known.filter(k => k.includes(w) || w.includes(k) && k.length > 1).forEach(k => set.add(k)); }
+  matched[field] = [...set];
+  return set;
+}
+const keyVal = (r, g) => g==='week' ? weekOf(r.day) : g==='dow' ? dowOf(r.day) : r[g];
+
+function queryAds(inp){
+  const from = String(inp.from||''), to = String(inp.to||'');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new Error('from/to는 YYYY-MM-DD 형식이어야 해요');
+  const gb = (Array.isArray(inp.group_by) ? inp.group_by : inp.group_by ? [inp.group_by] : []).map(String);
+  const f = inp.filters || {};
+  const useCamp = gb.includes('campaign') || f.campaign_contains;
+  const src = useCamp ? D.camp : D.cube;
+  const okDims = ['day','week','month','dow','media','ctype','product','owner','goal','landing','device'].concat(useCamp ? ['campaign'] : []);
+  const bad = gb.filter(g => !okDims.includes(g)); if (bad.length) throw new Error('지원하지 않는 group_by: '+bad.join(','));
+  const notes = [];
+  if (useCamp && (from < D.range.camp[0])) notes.push(`캠페인 단위 데이터는 ${D.range.camp[0]}~${D.range.camp[1]}만 있어요. 그 이전은 빠졌어요.`);
+  const matched = {};
+  const ms = {};
+  for (const k of ['media','ctype','product','owner','goal','landing','device']) ms[k] = matcher(k, f[k], D.vals[k], matched);
+  const cc = f.campaign_contains ? String(f.campaign_contains) : null;
+  const groups = new Map(); const tot = {}; NUM.forEach(k => tot[k]=0);
+  for (const r of src) {
+    if (r.day < from || r.day > to) continue;
+    let ok = true; for (const k in ms) if (ms[k] && !ms[k].has(r[k])) { ok = false; break; }
+    if (!ok || (cc && !r.campaign.includes(cc))) continue;
+    const key = gb.map(g => keyVal(r,g)).join('\u0001');
+    let g = groups.get(key); if (!g) { g = {}; NUM.forEach(k => g[k]=0); gb.forEach(x => g['_'+x] = keyVal(r,x)); groups.set(key, g); }
+    for (const k of NUM) { g[k] += r[k]; tot[k] += r[k]; }
+  }
+  let rows = [...groups.values()].map(g => { const o = {}; gb.forEach(x => o[x] = g['_'+x]); return Object.assign(o, derive(g)); });
+  const sort = String(inp.sort || (gb.some(x => ['day','week','month'].includes(x)) ? '' : 'cost'));
+  if (sort) { const desc = inp.desc !== false; rows.sort((a,b) => ((b[sort]??-Infinity) - (a[sort]??-Infinity)) * (desc?1:-1)); }
+  else rows.sort((a,b) => String(a[gb[0]]).localeCompare(String(b[gb[0]])));
+  const limit = Math.min(Math.max(+inp.limit || 40, 1), 80);
+  const n = rows.length; rows = rows.slice(0, limit);
+  if (n > limit) notes.push(`${n}개 중 ${sort||'정렬'} 상위 ${limit}개만 보냈어요`);
+  if (!groups.size) notes.push('조건에 맞는 행이 없어요. 기간과 필터 값을 확인하세요.');
+  if (to > D.range.cube[1]) notes.push(`광고 데이터 마지막 일자는 ${D.range.cube[1]}이에요`);
+  return { source: useCamp ? 'camp(캠페인별 최근 35일)' : 'cube(일별 광고)', period:[from,to], filters_matched: matched, total: derive(tot), rows, notes };
+}
+
+function querySales(inp){
+  const from = String(inp.from||''), to = String(inp.to||'');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new Error('from/to는 YYYY-MM-DD 형식이어야 해요');
+  const gb = (Array.isArray(inp.group_by) ? inp.group_by : inp.group_by ? [inp.group_by] : []).map(String);
+  const okDims = ['day','week','month','dow','channel','group','product','promo'];
+  const bad = gb.filter(g => !okDims.includes(g)); if (bad.length) throw new Error('지원하지 않는 group_by: '+bad.join(','));
+  const matched = {};
+  const mc = matcher('channel', inp.channel, D.svals.channel, matched);
+  const mg = matcher('group', inp.group, D.svals.group, matched);
+  const pc = inp.product_contains ? String(inp.product_contains) : null;
+  const groups = new Map(); const tot = {rev:0,ord:0,qty:0,views:0,cart:0};
+  for (const r of D.sales) {
+    if (r.day < from || r.day > to) continue;
+    if (mc && !mc.has(r.channel)) continue; if (mg && !mg.has(r.group)) continue; if (pc && !r.product.includes(pc)) continue;
+    const key = gb.map(g => keyVal(r,g)).join('\u0001');
+    let g = groups.get(key); if (!g) { g = {rev:0,ord:0,qty:0,views:0,cart:0}; gb.forEach(x => g['_'+x] = keyVal(r,x)); groups.set(key,g); }
+    for (const k in tot) { g[k] += r[k]; tot[k] += r[k]; }
+  }
+  const dv = m => ({ rev:r0(m.rev), ord:r0(m.ord), qty:r0(m.qty), aov: m.ord ? r0(m.rev/m.ord) : null });
+  let rows = [...groups.values()].map(g => { const o = {}; gb.forEach(x => o[x] = g['_'+x]); return Object.assign(o, dv(g)); });
+  const sort = String(inp.sort || (gb.some(x => ['day','week','month'].includes(x)) ? '' : 'rev'));
+  if (sort) rows.sort((a,b) => (b[sort]??-1) - (a[sort]??-1)); else rows.sort((a,b) => String(a[gb[0]]).localeCompare(String(b[gb[0]])));
+  const limit = Math.min(Math.max(+inp.limit || 40, 1), 80);
+  const notes = []; const n = rows.length; rows = rows.slice(0, limit);
+  if (n > limit) notes.push(`${n}개 중 상위 ${limit}개만 보냈어요`);
+  const chans = mc ? [...mc] : D.svals.channel;
+  for (const c of chans) {
+    const cov = D.scov.filter(s => s.channel === c);
+    const covered = cov.some(s => s.start <= from && s.end >= to);
+    if (!covered) notes.push(`${c} 실매출은 ${cov.map(s => s.start+'~'+s.end).join(', ')}만 있어요. 요청 기간 일부가 비어 있어 그 구간은 0으로 잡혀요.`);
+  }
+  return { source:'실매출(공식몰 판매금액, 네이버 판매금액(순))', period:[from,to], filters_matched: matched, total: dv(tot), rows, notes };
+}
+
+function queryPromos(inp){
+  const from = String(inp.from||'0000'), to = String(inp.to||'9999');
+  const ch = inp.channel ? String(inp.channel) : null, pr = inp.product ? String(inp.product) : null;
+  const rows = D.promo.filter(p => p.start <= to && p.end >= from && (!ch || (p.channels||p.channel).includes(ch)) && (!pr || (p.products+p.main).includes(pr)))
+    .sort((a,b) => a.start.localeCompare(b.start)).slice(0, 60)
+    .map(p => ({ name:p.name, channel:p.channels||p.channel, start:p.start, end:p.end, main:p.main, items:(p.items||'').slice(0,140), gift:p.gift||'' }));
+  return { period:[from,to], count: rows.length, rows };
+}
+
+const TOOLS = [
+  { name:'query_ads', description:'광고 데이터(일별 cube, 2025-01-01부터. 2025년은 카카오만 없어요. 2025년 메타 클릭은 클릭(전체) 기준이라 2026년(링크 클릭)과 CTR·CPC 비교 불가)를 기간·필터로 합산해 표로 돌려줘요. 지표: imp, clk, cost(VAT 별도), conv, rev(광고 기여 매출), ctr_pct, cpc, cvr_pct, cpa, roas_pct, aov, cpm, rank(노출가중 평균 노출순위, 네이버 SA·SSA만). group_by에 campaign을 넣거나 campaign_contains를 쓰면 최근 35일 캠페인 데이터를 써요. 비교가 필요하면 같은 라운드에서 기간만 바꿔 두 번 부르세요.',
+    inputSchema:{ type:'object', properties:{
+      from:{type:'string',description:'YYYY-MM-DD'}, to:{type:'string',description:'YYYY-MM-DD(포함)'},
+      group_by:{type:'array',items:{type:'string',enum:['day','week','month','dow','media','ctype','product','owner','goal','landing','device','campaign']},description:'week는 월요일 시작 주'},
+      filters:{type:'object',properties:{ media:{type:'array',items:{type:'string'}}, ctype:{type:'array',items:{type:'string'}}, product:{type:'array',items:{type:'string'}}, owner:{type:'array',items:{type:'string'}}, goal:{type:'array',items:{type:'string'}}, landing:{type:'array',items:{type:'string'}}, device:{type:'array',items:{type:'string'}}, campaign_contains:{type:'string'} }},
+      sort:{type:'string',description:'정렬할 지표 이름(기본 cost 내림차순, 시간축이면 시간순)'}, desc:{type:'boolean'}, limit:{type:'integer',description:'기본 40, 최대 80'} }, required:['from','to'] },
+    execute: (i) => queryAds(i) },
+  { name:'query_sales', description:'실매출(자사몰·스마트스토어 주문 기준)을 기간·채널·제품군으로 합산해요. 지표: rev(실매출), ord(주문수), qty(수량), aov(주문당 매출). 채널별 보유 기간이 달라 비는 구간은 notes로 알려줘요.',
+    inputSchema:{ type:'object', properties:{
+      from:{type:'string'}, to:{type:'string'},
+      group_by:{type:'array',items:{type:'string',enum:['day','week','month','dow','channel','group','product','promo']}},
+      channel:{type:'array',items:{type:'string'},description:'공식몰, 네이버'}, group:{type:'array',items:{type:'string'},description:'제품군(광고 product와 같은 이름 체계)'},
+      product_contains:{type:'string'}, sort:{type:'string'}, limit:{type:'integer'} }, required:['from','to'] },
+    execute: (i) => querySales(i) },
+  { name:'query_promos', description:'기간과 겹치는 프로모션·행사(MD 행사표 기준)를 돌려줘요: 행사명, 채널, 시작·종료일, 주력 제품, 구성, 사은품. CVR·매출 변화의 원인을 볼 때 쓰세요.',
+    inputSchema:{ type:'object', properties:{ from:{type:'string'}, to:{type:'string'}, channel:{type:'string'}, product:{type:'string'} } },
+    execute: (i) => queryPromos(i) },
+];
+
+function fmtWon(v){ return Math.round(v).toLocaleString('ko-KR'); }
+function context(){
+  const today = kstToday();
+  const lines = [];
+  const mm = d3.rollups(D.cube, v => { const s={}; NUM.forEach(k => s[k]=d3.sum(v, r => r[k])); return derive(s); }, r => r.month, r => r.media);
+  for (const [m, arr] of mm.sort((a,b) => a[0].localeCompare(b[0])))
+    lines.push(m+' | '+arr.map(([md,x]) => `${md} 비용${fmtWon(x.cost)} 광고매출${fmtWon(x.rev)} ROAS${x.roas_pct}%`).join(' / '));
+  const sm = d3.rollups(D.sales, v => d3.sum(v, r => r.rev), r => r.month, r => r.channel)
+    .filter(([m]) => m >= '2026-01').sort((a,b) => a[0].localeCompare(b[0]))
+    .map(([m, arr]) => m+' | '+arr.map(([c,v]) => `${c} ${fmtWon(v)}`).join(' / '));
+  return `오늘(한국시간): ${today} (${dowOf(today)}요일)
+광고 데이터: ${D.range.cube[0]}~${D.range.cube[1]} (캠페인 단위는 ${D.range.camp[0]}~${D.range.camp[1]})
+2025년 광고 데이터 주의: 네이버 SA·쇼핑검색·BSA, GFA, 메타는 1/1부터, 구글은 1/22부터. 카카오는 2025년 행 없음. GFA 2025년 2월은 거의 비어 있음. 2025년 메타 클릭은 클릭(전체), 2026년은 링크 클릭이라 메타 CTR·CPC 전년 비교는 하지 말 것. 2025년 메타 캠페인 분류는 YA가 확인·수정한 분류표 기준.
+실매출 보유 기간: ${D.scov.map(s => s.channel+' '+s.start+'~'+s.end).join(', ')}
+매체 값: ${D.vals.media.join(', ')} / 유형(ctype): ${D.vals.ctype.join(', ')}
+제품(product): ${D.vals.product.join(', ')}
+관리(owner): ${D.vals.owner.join(', ')} / 목표: ${D.vals.goal.join(', ')} / 랜딩: ${D.vals.landing.join(', ')} / 디바이스: ${D.vals.device.join(', ')}
+
+[월별 광고 요약]
+${lines.join('\n')}
+
+[월별 실매출 요약(2026)]
+${sm.join('\n')}`;
+}
+
+const RULES = () => `너는 링티 디지털마케팅 파트의 퍼포먼스 광고 분석가야. 동료 마케터가 대시보드를 보다가 바로 묻는 질문에 답해.
+
+규칙
+- 숫자는 반드시 도구(query_ads, query_sales, query_promos) 결과나 아래 요약에서만 가져와. 추측한 숫자를 쓰지 마. 계산한 기간을 꼭 밝혀.
+- "지난주"는 직전 월~일 완결 주, "최근 7일"은 광고 마지막 일자 기준 7일, "이번 달"은 1일~광고 마지막 일자. 비교는 기본적으로 직전 같은 길이 기간과 해.
+- 지표 정의: CTR=클릭/노출, CPC=비용/클릭, CVR=전환/클릭, CPA=비용/전환, ROAS=광고매출/비용(비용 VAT 별도), CPM=비용/노출×1000, 노출순위=노출 가중 평균(네이버 SA·SSA만, 숫자가 작을수록 상위).
+- 현상만 말하지 말고 원인을 해석해. 예: CPC↑에 순위 유지·하락이면 경쟁 심화, CPC↑에 순위 상승이면 입찰 인상 효과, CTR↓+CPC↑면 소재 피로, CPM↑면 경매 경쟁. CVR 변화는 프로모션 시작·종료(query_promos), 유입 질 변화(트래픽 목표 비중, 디바이스·랜딩 믹스), 객단가(AOV) 변화로 나눠 봐. 해석은 데이터로 확인한 것과 추정을 구분해서 말해.
+- 원인을 좁힐 때는 매체·유형·제품·디바이스·랜딩으로 나눠 기여가 큰 쪽을 찾아.
+- 주의할 데이터: 카카오는 2026-08-20에 집행 종료. 실매출은 공식몰 ~2026-09-30, 네이버는 4/4~6/2와 8/2~9/30만 있어 10월 실매출은 없음. 구글은 최근 며칠 전환이 늦게 잡힐 수 있음. BSA(브랜드검색) 비용은 노출 있는 날만 반영. 광고 rev는 광고 기여 매출이고 실매출과 달라.
+- 형식: 한국어 존댓말. 첫 1~2문장에 결론. 그다음 근거 표(행 10개 이하, 원 단위 콤마, CTR·CVR은 소수 둘째 자리 %), 해석, 할 일 1~3개. 길게 늘어놓지 말고 질문 크기에 맞춰.
+- 데이터에 없는 것은 없다고 말하고 어떤 데이터가 있으면 답할 수 있는지 알려줘.
+
+${context()}`;
+
+// ---------- 화면 ----------
+const CHIPS = ['지금 보고 있는 기간·필터 기준으로 핵심만 요약해줘','지난주 매체별 성과를 전주와 비교해서 요약해줘','최근 7일 ROAS가 떨어진 이유가 뭐야?','네이버 SA·쇼핑검색 CPC와 노출순위 추이를 주별로 보여줘','9월 실매출과 광고비 흐름을 같이 봐줘','이번 달 비용 대비 성과가 제일 나쁜 캠페인 5개는?'];
+const chips = $('chips');
+for (const c of CHIPS) { const b = document.createElement('button'); b.type='button'; b.className='chip'; b.textContent=c; b.onclick=()=>{ $('q').value=c; $('f').requestSubmit(); }; chips.append(b); }
+const PAGE = { summary:'요약', product:'제품별', sales:'실매출', media:'매체·유형', trend:'주차·월별', campaign:'캠페인' };
+function viewContext(){
+  const v = window.__dashView ? window.__dashView() : null; if (!v) return '';
+  const p = v.params || {}; const sel = Object.entries(p).filter(([k,x]) => Array.isArray(x) ? x.length : x != null && x !== '' && !['start','end','cmp'].includes(k)).map(([k,x]) => k+'='+(Array.isArray(x)?x.join(','):x));
+  const tk = document.getElementById('takeaway');
+  return `[사용자가 지금 보고 있는 대시보드 화면]\n탭: ${PAGE[v.page]||v.page} / 기간: ${p.start||'?'}~${p.end||'?'} / 비교: ${p.cmp==='prev'?'직전 같은 기간':p.cmp||'직전 같은 기간'}\n슬라이서 선택: ${sel.length?sel.join(' / '):'없음(전체)'}\n화면 상단 요약 문구: ${tk ? tk.textContent.trim().slice(0,400) : ''}\n질문에 기간·조건이 없으면 이 화면의 기간과 슬라이서 조건을 그대로 써.`;
+}
+
+marked.setOptions({ gfm:true, breaks:false });
+function render(el, md){
+  el.innerHTML = DOMPurify.sanitize(marked.parse(md || ''));
+  el.querySelectorAll('table').forEach(t => { if (!t.parentElement.classList.contains('tbl')) { const w = document.createElement('div'); w.className='tbl'; t.replaceWith(w); w.append(t); } });
+}
+
+const ERR = { not_granted:'AI 사용이 허용되지 않았어요. 페이지의 권한 메뉴에서 Claude 사용을 허용해 주세요.', rate_limited:'요청이 몰렸거나 사용 한도에 닿았어요. 잠시 뒤 다시 물어봐 주세요.',
+  tools_unavailable:'이 앱 화면에서는 데이터 계산 기능을 쓸 수 없어요. claude.ai 웹에서 열어 주세요.', prompt_too_large:'질문 범위가 너무 커요. 기간이나 항목을 줄여서 물어봐 주세요.',
+  cancelled:'멈췄어요.', unavailable:'지금 AI에 연결할 수 없어요. 잠시 뒤 다시 시도해 주세요.' };
+
+let sample = null, turns = [], ctl = null, ready = false;
+const STEP = { query_ads:'광고 데이터 계산', query_sales:'실매출 계산', query_promos:'프로모션 확인' };
+function stepText(name, i){
+  const parts = [STEP[name]||name];
+  if (i.from) parts.push(`${i.from}~${i.to}`);
+  const g = i.group_by; if (g && g.length) parts.push((Array.isArray(g)?g:[g]).join('·')+'별');
+  const f = i.filters || {}; const fv = Object.entries(f).filter(([,v]) => v && v.length).map(([,v]) => Array.isArray(v)?v.join(','):v);
+  if (i.channel) fv.push([].concat(i.channel).join(',')); if (i.group) fv.push([].concat(i.group).join(','));
+  if (fv.length) parts.push(fv.join(' / '));
+  return parts.join(' · ');
+}
+
+async function ask(text){
+  $('empty')?.remove();
+  const u = document.createElement('div'); u.className='msg user'; u.textContent=text; $('log').append(u);
+  const a = document.createElement('div'); a.className='msg ai';
+  const steps = document.createElement('div'); steps.className='steps'; const body = document.createElement('div'); body.className='body'; body.textContent='생각하는 중…';
+  a.append(steps, body); $('log').append(a); $('log-wrap').scrollTop = $('log-wrap').scrollHeight;
+  const tools = TOOLS.map(t => ({ ...t, execute: (inp) => { const d = document.createElement('div'); d.textContent = stepText(t.name, inp||{}); steps.append(d); return t.execute(inp||{}); } }));
+  const hist = turns.slice(-8);
+  const input = [...hist, { role:'user', content: RULES() + '\n\n' + viewContext() + '\n\n질문: ' + text }];
+  ctl = new AbortController(); busy(true);
+  try {
+    const res = await sample(input, { tools, signal: ctl.signal, modelTier:'default', onText: ({text:t}) => render(body, t) });
+    render(body, res.text);
+    if (res.truncated) { const n = document.createElement('div'); n.className='note'; n.textContent='답이 길어 중간에 끊겼어요. 범위를 나눠서 물어봐 주세요.'; a.append(n); }
+    turns.push({ role:'user', content:text }, { role:'assistant', content:res.text });
+  } catch (e) {
+    if (e && e.text) render(body, e.text); else body.textContent = '';
+    const n = document.createElement('div'); n.className='note'; n.textContent = ERR[e && e.code] || ('답을 받지 못했어요. 다시 시도해 주세요.' + (e && e.code ? ` (${e.code})` : '')); a.append(n);
+  } finally { busy(false); }
+}
+function busy(b){ $('send').disabled = b || !ready; $('stop').hidden = !b; $('q').disabled = b; }
+$('stop').onclick = () => ctl?.abort();
+$('reset').onclick = () => { turns = []; $('log').innerHTML = '<div class="empty" id="ai-empty">새 대화를 시작했어요.</div>'; };
+$('q').addEventListener('input', e => { e.target.style.height='auto'; e.target.style.height=Math.min(e.target.scrollHeight,160)+'px'; });
+$('q').addEventListener('keydown', e => { if (e.key==='Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('f').requestSubmit(); } });
+$('f').addEventListener('submit', e => { e.preventDefault(); const t = $('q').value.trim(); if (!t || !ready || $('send').disabled) return; $('q').value=''; $('q').style.height='auto'; ask(t); });
+
+function facts(){
+  const f = $('facts'); f.innerHTML='';
+  const add = (html, cls) => { const s = document.createElement('span'); s.className='fact'+(cls?' '+cls:''); s.innerHTML=html; f.append(s); };
+  add(`광고 <b>${D.range.cube[0]} ~ ${D.range.cube[1]}</b>`);
+  add(`캠페인 <b>${D.range.camp[0]} ~ ${D.range.camp[1]}</b>`);
+  add(`실매출 공식몰 <b>~${D.scov.find(s=>s.channel==='공식몰')?.end}</b>, 네이버 <b>${D.scov.filter(s=>s.channel==='네이버').map(s=>s.start.slice(5)+'~'+s.end.slice(5)).join(', ')}</b>`);
+  add('카카오 8/20 집행 종료', 'warn');
+}
+
+window.__dbg = { D, queryAds, querySales, queryPromos, RULES, viewContext };
+busy(false);
+load().then(() => { facts(); ready = !!sample; busy(false); })
+  .catch(err => { $('facts').innerHTML = '<span class="fact warn">데이터를 불러오지 못했어요. 새로고침해 주세요.</span>'; console.error(err); });
+
+(async () => {
+  try { sample = window.claude ? await window.claude.use('sample') : null; } catch { sample = null; }
+  if (!sample) { $('status').textContent = 'AI를 쓸 수 없는 화면이에요. claude.ai에 로그인한 상태로 열어 주세요.'; return; }
+  const lim = await sample.limits?.().catch(() => null);
+  $('status').textContent = lim && !lim.tools ? '이 화면에서는 데이터 계산 기능이 꺼져 있어요. claude.ai 웹에서 열어 주세요.' : '첫 질문 때 Claude 사용 허용을 한 번 물어봐요. 답은 보는 사람의 Claude 계정으로 계산돼요.';
+  ready = !!D.cube; busy(false);
+})();
+})();
+</script>
+</body></html>
