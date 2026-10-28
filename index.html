@@ -15,7 +15,7 @@
 </form></div>
 <script>
 (() => {
-  const SALT = 'vRFDp+jGKG3GauNrpA6OsA==', ITER = 2000000, CHECK = 'eVkb0NA21tvHZYrbhoH8hraYHRebGhk4Fk35EBtAQgbL0/1d4A==';
+  const SALT = '2X9btBv318QCOLYr7meImQ==', ITER = 2000000, CHECK = 'NEqMyVWbWv63FtBeeqbY0aU73PapLbVmgWOYisd6nR0ijVNzEA==';
   const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   let ready; const keyP = new Promise(r => ready = r);
   const dec = async (key, buf) => crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12));
@@ -202,6 +202,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
 .lx-chip{flex:0 0 auto;font:inherit;font-size:12px;line-height:1.3;text-align:left;padding:5px 9px;border:1px solid var(--color-border-line);border-radius:4px;background:var(--color-panel);color:var(--color-fg);cursor:pointer;white-space:nowrap}
 .lx-chip:hover{border-color:var(--color-fg-muted)}
 .lx-chip[aria-pressed="true"]{background:color-mix(in srgb,var(--lx-acc) 22%,var(--color-bg));border-color:var(--lx-acc);font-weight:var(--cds-font-weight-medium)}
+.lx-pm{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}
 .lx-chip.empty{color:var(--color-fg-muted);opacity:.55}
 .lx-chip:focus-visible,.lx-sl-x:focus-visible{outline:2px solid var(--color-fg);outline-offset:1px}
 .lx-period{display:flex;flex-wrap:wrap;gap:var(--cds-gap-sm);align-items:center;width:100%}
@@ -409,7 +410,8 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
     </div>
     <div class="lx-card" id="card-promo-mall">
       <h2>공식몰 프로모션 성과</h2>
-      <p class="lx-note" id="promo-mall-note">MD 제품 행사 예정 내역의 공식몰 행사예요. 행사 이름에 마우스를 올리면 구성·사은품이 나와요. 기간 슬라이서와 관계없이 실매출이 있는 행사를 모두 보여주고, 제품·매체 슬라이서는 적용돼요. 직전 14일 대비는 행사 시작 전 14일 하루 평균과 비교한 값이에요.</p>
+      <div class="lx-pm" id="promo-months" role="group" aria-label="프로모션 월 선택"></div>
+      <p class="lx-note" id="promo-mall-note">월 버튼으로 그 달에 걸친 행사만 볼 수 있어요(여러 달 선택 가능, 공구별 성과 표에도 적용). MD 제품 행사 예정 내역의 공식몰 행사예요. 행사 이름에 마우스를 올리면 구성·사은품이 나와요. 기간 슬라이서와 관계없이 실매출이 있는 행사를 모두 보여주고, 제품·매체 슬라이서는 적용돼요. 직전 14일 대비는 행사 시작 전 14일 하루 평균과 비교한 값이에요.</p>
       <div class="lx-tw"><table class="lx-t" id="t-promo-mall" data-source="promo sales sprod cube"></table></div>
     </div>
     <div class="lx-card" id="card-promo-gb">
@@ -825,6 +827,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
 
 
 
+  const promoMonths = new Set();
   const drawPromo = (f, sr, smin, smax) => {
     const tm = document.getElementById('t-promo-mall'), to = document.getElementById('t-promo-other'); tm.replaceChildren(); to.replaceChildren();
     const evs = promoEvents(); if (!evs.length) { tm.append(el('caption', 'lx-note', '프로모션 캘린더를 불러오는 중이에요.')); return; }
@@ -836,8 +839,17 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
     const adIn = (a, b, med) => agg(f.filter((r) => r.day >= a && r.day <= b && (!med || r.media === med)));
     const nDay = new Map(d3.rollups(salesRows().filter((r) => r.channel === '네이버' && (!ps.size || ps.has(r.group))), (v) => d3.sum(v, (r) => r.rev), (r) => r.day));
     const nvChg = (a, b) => { const p0 = iso(parse(a) - 14 * DAY), p1 = iso(parse(a) - DAY); if (!chCov('네이버', p0, b)) return null; const n = Math.round((parse(b) - parse(a)) / DAY) + 1; let v = 0, w = 0; for (let t0 = parse(a); t0 <= parse(b); t0 += DAY) v += nDay.get(iso(t0)) || 0; for (let t0 = parse(p0); t0 <= parse(p1); t0 += DAY) w += nDay.get(iso(t0)) || 0; return w ? { cur: v / n, pre: w / 14 } : null; };
-    const mall = evs.filter((x) => x.channel === '공식몰' && x.start <= smax && x.end >= smin && pOk(x)).sort((a, b) => d3.descending(a.start, b.start));
-    head(tm, ['행사', '메인 제품', '기간', '일수', '실매출/일', '직전 14일 대비', '첫 2일 비중', '주력 판매 프로모션명', '광고비/일', 'MER', '광고 ROAS', 'ROAS 직전 대비']);
+    const monthsOf = (x) => { const out = []; let m = x.start.slice(0, 7); const e = x.end.slice(0, 7); while (m <= e && out.length < 24) { out.push(m); const [y, mo] = m.split('-').map(Number); m = mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, '0')}`; } return out; };
+    const inSel = (x) => !promoMonths.size || monthsOf(x).some((m) => promoMonths.has(m));
+    const pool = evs.filter((x) => (x.channel === '공식몰' || x.channel === '공구') && x.start <= smax && x.end >= smin && pOk(x));
+    const allM = [...new Set(pool.flatMap((x) => monthsOf(x)).filter((m) => m >= smin.slice(0, 7) && m <= smax.slice(0, 7)))].sort().reverse();
+    for (const m of [...promoMonths]) if (!allM.includes(m)) promoMonths.delete(m);
+    const pmBox = document.getElementById('promo-months'); pmBox.replaceChildren();
+    const mLab = (m) => `${m.slice(2, 4)}년 ${Number(m.slice(5))}월`;
+    const allB = mkChip('전체'); allB.setAttribute('aria-pressed', String(!promoMonths.size)); allB.onclick = () => { promoMonths.clear(); redraw(); }; pmBox.append(allB);
+    allM.forEach((m) => { const b = mkChip(mLab(m)); b.setAttribute('aria-pressed', String(promoMonths.has(m))); b.onclick = (ev) => { if (ev.ctrlKey || ev.metaKey) { promoMonths.clear(); promoMonths.add(m); } else if (promoMonths.has(m)) promoMonths.delete(m); else promoMonths.add(m); redraw(); }; pmBox.append(b); });
+    const mall = evs.filter((x) => x.channel === '공식몰' && x.start <= smax && x.end >= smin && pOk(x) && inSel(x)).sort((a, b) => d3.descending(a.start, b.start));
+    head(tm, ['월', '행사', '메인 제품', '기간', '일수', '실매출/일', '직전 14일 대비', '첫 2일 비중', '주력 판매 프로모션명', '광고비/일', 'MER', '광고 ROAS', 'ROAS 직전 대비']);
     const bm = el('tbody');
     mall.forEach((x) => {
       const b = x.end > smax ? smax : x.end; const cur = sumDays(x.start, b); if (!cur.n) return; const pre = preOf(x.start);
@@ -845,7 +857,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
       const rows = srf.filter((r) => r.day >= x.start && r.day <= b && r.kind !== '일반');
       const tp = d3.rollups(rows, (v) => d3.sum(v, (r) => r.rev), (r) => r.promo).sort((p, q) => q[1] - p[1])[0];
       const A = adIn(x.start, b), Bp = adIn(iso(parse(x.start) - 14 * DAY), iso(parse(x.start) - DAY));
-      const tr = el('tr'); const c0 = el('td', 'camp', x.name); c0.title = [x.items && '구성: ' + x.items, x.gift && x.gift, x.note, x.source && '출처: ' + x.source].filter(Boolean).join('\n'); tr.append(c0, el('td', 'l', x.main || ''));
+      const tr = el('tr'); const c0 = el('td', 'camp', x.name); c0.title = [x.items && '구성: ' + x.items, x.gift && x.gift, x.note, x.source && '출처: ' + x.source].filter(Boolean).join('\n'); tr.append(el('td', 'l', mLab(x.start.slice(0, 7))), c0, el('td', 'l', x.main || ''));
       tr.append(el('td', 'l', short(x.start) + '~' + short(x.end) + (x.end > smax ? ' *' : '')));
       const cd = cur.v / cur.n, pd = pre.n ? pre.v / pre.n : 0; const dl = pd ? delta('rev', cd, pd) : { txt: '–', good: 0 };
       [fmtN(cur.n), fmtN(cd)].forEach((v) => tr.append(tdN(v))); tr.append(tdN(dl.txt, cls(dl.good)));
@@ -857,13 +869,13 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
     });
     tm.append(bm);
     const tg = document.getElementById('t-promo-gb'); tg.replaceChildren();
-    const gbs = evs.filter((x) => x.channel === '공구' && x.start <= smax && x.end >= smin && pOk(x)).sort((a, b) => d3.descending(a.start, b.start));
-    head(tg, ['공구', '메인 제품', '기간', '일수', '공구 매출', '주문건수', '객단가', '공식몰 실매출 대비']);
+    const gbs = evs.filter((x) => x.channel === '공구' && x.start <= smax && x.end >= smin && pOk(x) && inSel(x)).sort((a, b) => d3.descending(a.start, b.start));
+    head(tg, ['월', '공구', '메인 제품', '기간', '일수', '공구 매출', '주문건수', '객단가', '공식몰 실매출 대비']);
     const bg = el('tbody');
     gbs.forEach((x) => {
       const rr = srf.filter((r) => r.promo === x.name && r.day >= x.start && r.day <= x.end); const a = sagg(rr); const tot = sumDays(x.start, x.end);
       const n = Math.round((parse(x.end) - parse(x.start)) / DAY) + 1;
-      const tr = el('tr'); tr.append(el('td', 'camp', x.name), el('td', 'l', x.main || ''), el('td', 'l', short(x.start) + '~' + short(x.end)));
+      const tr = el('tr'); tr.append(el('td', 'l', mLab(x.start.slice(0, 7))), el('td', 'camp', x.name), el('td', 'l', x.main || ''), el('td', 'l', short(x.start) + '~' + short(x.end)));
       [fmtN(n), fmtN(a.rev), fmtN(a.ord), fmtN(a.aov), tot.v ? fmtP(a.rev / tot.v) : '–'].forEach((v) => tr.append(tdN(v))); bg.append(tr);
     });
     tg.append(bg);
