@@ -15,7 +15,7 @@
 </form></div>
 <script>
 (() => {
-  const SALT = 'DDQP202gOg6Ey2bmYL8WIg==', ITER = 2000000, CHECK = 'jpWTqZqok4LwC7hMfornhT0lAoo3EPoqQIFwHOTAbe5IysSjVQ==';
+  const SALT = '1psN3e6h4JQZBd4YjOY5ZQ==', ITER = 2000000, CHECK = '2fC8W7XLHqIr7c4/aaP0wnbicTy02IikFNLWvEjo9OwMWCZ83A==';
   const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   let ready; const keyP = new Promise(r => ready = r);
   const dec = async (key, buf) => crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12));
@@ -519,7 +519,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
   const allCh = () => { const c = [...new Set(scov().map((r) => r.channel))]; return c.length ? c : ['공식몰']; };
   const chCov = (ch, a, b) => { const l = scov().filter((r) => r.channel === ch); return !l.length || l.some((r) => r.start <= a && r.end >= b); };
   const covTxt = (ch) => scov().filter((r) => r.channel === ch).map((r) => short(r.start) + '~' + short(r.end)).join(', ');
-  const effCh = () => { const sel = P().schan || []; if (sel.length) return sel; const [s, e] = range(); if (!s) return allCh(); const full = allCh().filter((ch) => chCov(ch, s, e)); return full.length ? full : ['공식몰']; };
+  const effCh = () => { const sel = P().schan || []; if (sel.length) return sel; const [s, e] = range(); if (!s) return allCh(); const ce = d3.max(scov(), (r) => r.end); const full = allCh().filter((ch) => chCov(ch, s, ce && ce < e ? ce : e)); return full.length ? full : ['공식몰']; };
   const chLab = () => effCh().join('+');
   const chMissing = () => ((P().schan || []).length ? [] : allCh().filter((ch) => !effCh().includes(ch)));
   let salesECache = null;
