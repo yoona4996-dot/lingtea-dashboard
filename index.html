@@ -15,7 +15,7 @@
 </form></div>
 <script>
 (() => {
-  const SALT = 'Sm+a3Z8RpQf+vZaFQ5y61g==', ITER = 2000000, CHECK = 'VnndCz3y5AQt6gxWyAbWhetJH8t5xKoG2HL6cltzPH6FlH+S/Q==';
+  const SALT = 'mBAHCxbJSVbJFnOtrSjlVw==', ITER = 2000000, CHECK = 'W6/kvjeXy0jH2VOYEkOvqNtkKABBLZbky/58fOzh2tdWVze6cA==';
   const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   let ready; const keyP = new Promise(r => ready = r);
   const dec = async (key, buf) => crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12));
@@ -190,7 +190,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
 .lx-filters{display:flex;flex-wrap:wrap;gap:var(--cds-gap-sm);align-items:center;padding:var(--cds-pad-md);background:var(--color-panel);border:1px solid var(--color-border-line);border-radius:var(--cds-radius)}
 .lx-filters label{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);display:flex;align-items:center;gap:var(--cds-gap-xs)}
 .lx-filters input[type=date],.lx-filters select{font:inherit;font-size:var(--cds-font-size-caption);padding:var(--cds-pad-xs) var(--cds-pad-sm);border:1px solid var(--color-border-line);border-radius:var(--cds-radius);background:var(--color-bg);color:var(--color-fg)}
-.lx-slicers{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,9.5rem),1fr));gap:var(--cds-gap-sm);width:100%}
+.lx-slicers{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,9.5rem),1fr));gap:var(--cds-gap-sm);width:100%;align-items:start}
 .lx-sl{border:1px solid var(--color-border-line);border-radius:var(--cds-radius);background:var(--color-bg);padding:var(--cds-pad-xs) var(--cds-pad-sm) var(--cds-pad-sm);display:flex;flex-direction:column;gap:var(--cds-gap-xs);min-width:0}
 .lx-sl.wide{grid-column:span 2}
 .lx-sl.full{grid-column:1/-1}
@@ -198,7 +198,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
 .lx-sl-x{font:inherit;font-size:11px;border:0;background:transparent;color:var(--color-fg-muted);cursor:pointer;padding:2px 4px;border-radius:4px}
 .lx-sl-x[disabled]{visibility:hidden}
 .lx-sl-btns{display:flex;gap:2px}
-.lx-sl-b{display:flex;flex-wrap:wrap;gap:4px;align-content:flex-start;flex:0 0 auto}
+.lx-sl-b{display:flex;flex-wrap:wrap;gap:4px;align-content:flex-start;flex:0 0 auto;max-height:94px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;padding-right:2px}
 .lx-chip{flex:0 0 auto;font:inherit;font-size:12px;line-height:1.3;text-align:left;padding:5px 9px;border:1px solid var(--color-border-line);border-radius:4px;background:var(--color-panel);color:var(--color-fg);cursor:pointer;white-space:nowrap}
 .lx-chip:hover{border-color:var(--color-fg-muted)}
 .lx-chip[aria-pressed="true"]{background:color-mix(in srgb,var(--lx-acc) 22%,var(--color-bg));border-color:var(--lx-acc);font-weight:var(--cds-font-weight-medium)}
