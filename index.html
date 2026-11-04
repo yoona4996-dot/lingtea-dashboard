@@ -15,7 +15,7 @@
 </form></div>
 <script>
 (() => {
-  const SALT = 'jsn43gAesgmRJc9OOYozMg==', ITER = 2000000, CHECK = 'rBBeuBO2FklfGOTsCiQIa4aebHtMnUFLD2aTQ5dPO0jYfhLX+Q==';
+  const SALT = 'kM79Y6d9mvTCAc4Kua/Xbg==', ITER = 2000000, CHECK = 'GB4ntKqigxjWENqJu1zWHgPxIZqmE2kVBA1DE6d4pLHVSKgYrA==';
   const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   let ready; const keyP = new Promise(r => ready = r);
   const dec = async (key, buf) => crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12));
@@ -312,6 +312,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
     <button class="lx-tab" role="tab" id="tab-media" data-page="media" aria-selected="false">매체·유형</button>
     <button class="lx-tab" role="tab" id="tab-trend" data-page="trend" aria-selected="false">주차·월별</button>
     <button class="lx-tab" role="tab" id="tab-campaign" data-page="campaign" aria-selected="false">캠페인</button>
+    <button class="lx-tab" role="tab" id="tab-promo" data-page="promo" aria-selected="false">프로모션</button>
   </nav>
 
   <div class="lx-page" id="summary">
@@ -370,13 +371,6 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
       <p class="lx-note" id="product-note">매출액 내림차순. 막대는 매출액 크기. 행을 누르면 그 제품만 골라져요.</p>
       <div class="lx-tw"><table class="lx-t lx-click" id="t-product" data-source="cube sales sprod"></table></div>
     </div>
-    <div class="lx-card" id="card-pimpact">
-      <h2>프로모션 영향 인사이트</h2>
-      <p class="lx-note" id="pi-note"></p>
-      <ul class="pi-ins" id="pi-ins"></ul>
-      <div class="lx-tw"><table class="lx-t" id="t-pimpact" data-source="cube promo"></table></div>
-      <button class="pi-more" id="pi-more" type="button" hidden></button>
-    </div>
     <div class="lx-card" id="card-pxm">
       <h2>제품 × 매체</h2>
       <p class="lx-note">선택 기간 매체별 매출액과 ROAS. 비용이 없는 칸은 비워 뒀어요.</p>
@@ -416,22 +410,6 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
         <div class="lx-tw"><table class="lx-t" id="t-sales-promo" data-source="sales sprod"></table></div>
       </div>
     </div>
-    <div class="lx-card" id="card-promo-mall">
-      <h2>공식몰 프로모션 성과</h2>
-      <div class="lx-pm" id="promo-months" role="group" aria-label="프로모션 월 선택"></div>
-      <p class="lx-note" id="promo-mall-note">월 버튼으로 그 달에 걸친 행사만 볼 수 있어요(여러 달 선택 가능, 공구별 성과 표에도 적용). MD 제품 행사 예정 내역의 공식몰 행사예요. 행사 이름에 마우스를 올리면 구성·사은품이 나와요. 기간 슬라이서와 관계없이 실매출이 있는 행사를 모두 보여주고, 제품·매체 슬라이서는 적용돼요. 직전 14일 대비는 행사 시작 전 14일 하루 평균과 비교한 값이에요.</p>
-      <div class="lx-tw"><table class="lx-t" id="t-promo-mall" data-source="promo sales sprod cube"></table></div>
-    </div>
-    <div class="lx-card" id="card-promo-gb">
-      <h2>공구별 성과</h2>
-      <p class="lx-note">실매출 상품명에 공구 표시가 있는 링크를 공구 이름별로 묶었어요. 공구 매출은 그 링크의 판매금액, 비중은 같은 기간 공식몰 실매출 대비예요.</p>
-      <div class="lx-tw"><table class="lx-t" id="t-promo-gb" data-source="promo sales sprod"></table></div>
-    </div>
-    <div class="lx-card" id="card-promo-other">
-      <h2>외부 채널 행사와 공식몰 영향</h2>
-      <p class="lx-note">해당 채널 행사 기간의 매체 광고 성과와, 같은 기간 네이버 스마트스토어 실매출(있는 기간만)·공식몰 실매출이 직전 14일보다 어떻게 변했는지예요. 공식몰 행사가 겹치면 표시했어요.</p>
-      <div class="lx-tw"><table class="lx-t" id="t-promo-other" data-source="promo sales sprod cube"></table></div>
-    </div>
     <div class="lx-card" id="card-sales-items">
       <h2>상품별 (당일 상품명)</h2>
       <p class="lx-note">실매출 상위 100개. 판매유형·프로모션명은 그날 상품명 기준으로 붙였어요.</p>
@@ -459,6 +437,32 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
       <p class="lx-note" id="camp-note">최근 35일 데이터 안에서 선택 기간을 보여줘요. '전환 0' 표시는 목표가 전환인데 비용 1만원 이상 쓰고 전환이 없는 캠페인이에요.</p>
       <label class="lx-note" for="camp-q">검색 <input class="lx-search" id="camp-q" type="search" placeholder="캠페인 이름"></label>
       <div class="lx-tw"><table class="lx-t" id="t-camp" data-source="camp"></table></div>
+    </div>
+  </div>
+
+  <div class="lx-page" id="promo" hidden>
+    <div class="lx-card" id="card-pimpact">
+      <h2>프로모션 영향 인사이트</h2>
+      <p class="lx-note" id="pi-note"></p>
+      <ul class="pi-ins" id="pi-ins"></ul>
+      <div class="lx-tw"><table class="lx-t" id="t-pimpact" data-source="cube promo"></table></div>
+      <button class="pi-more" id="pi-more" type="button" hidden></button>
+    </div>
+    <div class="lx-card" id="card-promo-mall">
+      <h2>공식몰 프로모션 성과</h2>
+      <div class="lx-pm" id="promo-months" role="group" aria-label="프로모션 월 선택"></div>
+      <p class="lx-note" id="promo-mall-note">월 버튼으로 그 달에 걸친 행사만 볼 수 있어요(여러 달 선택 가능, 공구별 성과 표에도 적용). MD 제품 행사 예정 내역의 공식몰 행사예요. 행사 이름에 마우스를 올리면 구성·사은품이 나와요. 기간 슬라이서와 관계없이 실매출이 있는 행사를 모두 보여주고, 제품·매체 슬라이서는 적용돼요. 직전 14일 대비는 행사 시작 전 14일 하루 평균과 비교한 값이에요.</p>
+      <div class="lx-tw"><table class="lx-t" id="t-promo-mall" data-source="promo sales sprod cube"></table></div>
+    </div>
+    <div class="lx-card" id="card-promo-gb">
+      <h2>공구별 성과</h2>
+      <p class="lx-note">실매출 상품명에 공구 표시가 있는 링크를 공구 이름별로 묶었어요. 공구 매출은 그 링크의 판매금액, 비중은 같은 기간 공식몰 실매출 대비예요.</p>
+      <div class="lx-tw"><table class="lx-t" id="t-promo-gb" data-source="promo sales sprod"></table></div>
+    </div>
+    <div class="lx-card" id="card-promo-other">
+      <h2>외부 채널 행사와 공식몰 영향</h2>
+      <p class="lx-note">해당 채널 행사 기간의 매체 광고 성과와, 같은 기간 네이버 스마트스토어 실매출(있는 기간만)·공식몰 실매출이 직전 14일보다 어떻게 변했는지예요. 공식몰 행사가 겹치면 표시했어요.</p>
+      <div class="lx-tw"><table class="lx-t" id="t-promo-other" data-source="promo sales sprod cube"></table></div>
     </div>
   </div>
 
@@ -721,13 +725,13 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
   };
 
   // ---------- tabs ----------
-  const pages = ['summary', 'product', 'sales', 'media', 'trend', 'campaign'];
+  const pages = ['summary', 'product', 'sales', 'media', 'trend', 'campaign', 'promo'];
   let cur = 'summary';
   const show = (id) => {
     if (!pages.includes(id)) return;
     cur = id;
     pages.forEach((p) => { document.getElementById(p).hidden = p !== id; document.getElementById('tab-' + p).setAttribute('aria-selected', String(p === id)); });
-    document.getElementById('dow-wrap').hidden = id === 'campaign';
+    document.getElementById('dow-wrap').hidden = id === 'campaign' || id === 'promo';
     dash.setLink(id); redraw();
   };
   document.querySelectorAll('.lx-tab').forEach((b) => b.addEventListener('click', () => show(b.dataset.page)));
@@ -1492,7 +1496,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
     const A = agg(curR), B = agg(prevR);
 
     // ---------- 요일·주차 분석 (캠페인 탭 제외, 모든 탭 맨 아래) ----------
-    if (cur !== 'campaign') drawDow(f, s, e, cs, ce, cname);
+    if (cur !== 'campaign' && cur !== 'promo') drawDow(f, s, e, cs, ce, cname);
 
     // takeaway
     const tk = document.getElementById('takeaway'); tk.classList.remove('dash-skeleton');
@@ -1611,7 +1615,6 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
       const smax = d3.max(sr, (r) => r.day), smin = d3.min(sr, (r) => r.day);
       const e2 = e > smax ? smax : e; const s2 = s < smin ? smin : s;
       const note = document.getElementById('sales-range-note');
-      drawPromo(f, salesRows().filter((r) => r.channel === '공식몰'), smin, smax);
       if (s2 > e2) {
         note.textContent = `실매출은 ${smin}~${smax}까지 있어요. 선택 기간(${short(s)}~${short(e)})에는 실매출이 없어요.`;
         const b = el('button', 'lx-btn', '실매출 있는 마지막 7일 보기'); b.type = 'button'; b.id = 'sales-jump';
@@ -1718,6 +1721,10 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
       tm.append(tbm);
     }
 
+    if (cur === 'promo') {
+      const sr = salesRows();
+      if (sr.length) drawPromo(f, sr.filter((r) => r.channel === '공식몰'), d3.min(sr, (r) => r.day), d3.max(sr, (r) => r.day));
+    }
     if (cur === 'campaign') {
       const cd = dash.data('camp'); const t = document.getElementById('t-camp');
       if (cd.status !== 'ok') { t.replaceChildren(); return; }
@@ -2147,7 +2154,7 @@ ${context()}`;
 const CHIPS = ['지금 보고 있는 기간·필터 기준으로 핵심만 요약해줘','지난주 매체별 성과를 전주와 비교해서 요약해줘','최근 7일 ROAS가 떨어진 이유가 뭐야?','네이버 SA·쇼핑검색 CPC와 노출순위 추이를 주별로 보여줘','9월 실매출과 광고비 흐름을 같이 봐줘','이번 달 비용 대비 성과가 제일 나쁜 캠페인 5개는?'];
 const chips = $('chips');
 for (const c of CHIPS) { const b = document.createElement('button'); b.type='button'; b.className='chip'; b.textContent=c; b.onclick=()=>{ $('q').value=c; $('f').requestSubmit(); }; chips.append(b); }
-const PAGE = { summary:'요약', product:'제품별', sales:'실매출', media:'매체·유형', trend:'주차·월별', campaign:'캠페인' };
+const PAGE = { summary:'요약', product:'제품별', sales:'실매출', media:'매체·유형', trend:'주차·월별', campaign:'캠페인', promo:'프로모션' };
 function viewContext(){
   const v = window.__dashView ? window.__dashView() : null; if (!v) return '';
   const p = v.params || {}; const sel = Object.entries(p).filter(([k,x]) => Array.isArray(x) ? x.length : x != null && x !== '' && !['start','end','cmp'].includes(k)).map(([k,x]) => k+'='+(Array.isArray(x)?x.join(','):x));
