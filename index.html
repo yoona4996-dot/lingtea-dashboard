@@ -15,7 +15,7 @@
 </form></div>
 <script>
 (() => {
-  const SALT = 'KF5FpAADilfMn3o1H1HXgw==', ITER = 2000000, CHECK = 'uuE3bxqjTLB3QjpAtf2hMA/WwaZWL7/qDsOWF7vrFDb4inBJlA==';
+  const SALT = 'jsn43gAesgmRJc9OOYozMg==', ITER = 2000000, CHECK = 'rBBeuBO2FklfGOTsCiQIa4aebHtMnUFLD2aTQ5dPO0jYfhLX+Q==';
   const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   let ready; const keyP = new Promise(r => ready = r);
   const dec = async (key, buf) => crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12));
@@ -56,6 +56,7 @@
   });
 })();
 </script>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>링티 데일리 광고 대시보드</title>
 <style>
 /* 레이아웃: 대시보드 전체 폭 + 오른쪽 아래 작은 'AI에게 묻기' 버튼 → 오른쪽 서랍형 질문창(폰은 전체 화면) */
@@ -368,6 +369,13 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
       <h2>브랜드(제품)별 요약</h2>
       <p class="lx-note" id="product-note">매출액 내림차순. 막대는 매출액 크기. 행을 누르면 그 제품만 골라져요.</p>
       <div class="lx-tw"><table class="lx-t lx-click" id="t-product" data-source="cube sales sprod"></table></div>
+    </div>
+    <div class="lx-card" id="card-pimpact">
+      <h2>프로모션 영향 인사이트</h2>
+      <p class="lx-note" id="pi-note"></p>
+      <ul class="pi-ins" id="pi-ins"></ul>
+      <div class="lx-tw"><table class="lx-t" id="t-pimpact" data-source="cube promo"></table></div>
+      <button class="pi-more" id="pi-more" type="button" hidden></button>
     </div>
     <div class="lx-card" id="card-pxm">
       <h2>제품 × 매체</h2>
@@ -1363,7 +1371,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
       const segAll = d3.rollups(rowsC, agg, (r) => r.media + ' ' + r.ctype).map(([k, a]) => ({ k, a })), segB = new Map(d3.rollups(prevC, agg, (r) => r.media + ' ' + r.ctype));
       const totC = d3.sum(segAll, (x) => x.a.cost) || 1;
       const segs = segAll.filter((x) => x.a.cost / totC >= 0.08 && (segB.get(x.k) || {}).cost > 0).sort((p, q) => q.a.cost - p.a.cost).slice(0, 5);
-      const promoAt = (a0, a1, land) => evOn(a0, a1, land === '네이버' ? ['네이버'] : land === '공식몰' ? ['공식몰'] : ['공식몰', '네이버']);
+      const promoAt = (a0, a1, land) => evOn(a0, a1, land === '네이버' || land === '스토어' ? ['네이버'] : land === '공식몰' ? ['공식몰'] : ['공식몰', '네이버']);
       segs.forEach(({ k, a }) => {
         const b = segB.get(k); const media = k.split(' ')[0]; const rr = rowsC.filter((r) => r.media + ' ' + r.ctype === k);
         const land = d3.greatest(d3.rollups(rr, (v) => d3.sum(v, (r) => r.cost), (r) => r.landing), (x) => x[1])?.[0];
@@ -1754,6 +1762,162 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
   });
 })();
 </script>
+<style>
+#card-pimpact .pi-ins{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+#card-pimpact .pi-ins li{font-size:var(--cds-font-size-body);line-height:1.55;padding:8px 10px;border-radius:var(--cds-radius);background:var(--color-bg);border:1px solid var(--color-border-line);border-left:3px solid var(--color-fg-muted)}
+#card-pimpact .pi-ins li.dn{border-left-color:var(--color-bad);color:var(--color-fg)}
+#card-pimpact .pi-ins li.up{border-left-color:var(--color-ok);color:var(--color-fg)}
+#card-pimpact .pi-ins li b{font-weight:700}
+#card-pimpact .pi-tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--color-border-line);white-space:nowrap}
+#card-pimpact .pi-tag.dn{color:var(--color-bad);border-color:currentColor}
+#card-pimpact .pi-tag.up{color:var(--color-ok);border-color:currentColor}
+#card-pimpact .pi-more{font:inherit;font-size:var(--cds-font-size-caption);border:1px solid var(--color-border-line);background:transparent;color:var(--color-fg);border-radius:var(--cds-radius);padding:var(--cds-pad-xs) var(--cds-pad-sm);cursor:pointer;align-self:flex-start}
+#card-pimpact .pi-more:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
+</style>
+<script>
+/* 프로모션 영향 인사이트: promo(MD 행사표·프로모션 캘린더·Teams)와 광고 데이터(cube)로 매번 브라우저에서 계산한다.
+   행사 기간 vs 직전 같은 길이(최대 14일) 비교, 공식몰·네이버 랜딩만. 9월 중순부터 네이버 랜딩이 '스토어'로 표기되어 같은 채널로 묶는다. */
+(() => {
+  const DAY = 864e5, parse = (s) => Date.parse(s + 'T00:00:00Z'), iso = (t) => new Date(t).toISOString().slice(0, 10);
+  const short = (s) => { const t = new Date(parse(s)); return (t.getUTCMonth() + 1) + '/' + t.getUTCDate(); };
+  const fmtR = (v) => (v == null || !isFinite(v) ? '–' : d3.format(',.0f')(v * 100) + '%');
+  const fmtP = (v) => (v == null || !isFinite(v) ? '–' : (v >= 0 ? '+' : '') + d3.format('.0%')(v));
+  const fmtC = (v) => (Math.abs(v) >= 1e4 ? d3.format(',.0f')(v / 1e4) + '만' : d3.format(',.0f')(v));
+  const fmtV = (v) => (v == null || !isFinite(v) ? '–' : (v * 100).toFixed(2) + '%');
+  const LAND = (l) => (l === '스토어' ? '네이버' : l);
+  const CHS = ['공식몰', '네이버'];
+  const STOP = new Set(['네이버', '공식몰', '프로모션', '예정', '링티', '링티몰']);
+  const kw = (n) => new Set((String(n).match(/[가-힣A-Za-z]{2,}/g) || []).filter((w) => !STOP.has(w)));
+  const share = (a, b) => { for (const w of a) if (b.has(w)) return true; return false; };
+  const el = (tag, cls, txt) => { const x = document.createElement(tag); if (cls) x.className = cls; if (txt != null) x.textContent = txt; return x; };
+  const RANK = { 'MD 행사표': 0, Teams: 1, '프로모션 캘린더': 2 };
+
+  let idx = null, idxA = null, idxB = null;
+  const index = (a, b) => {
+    if (idx && idxA === a && idxB === b) return idx;
+    const m = new Map(); let max = '', min = '9';
+    const add = (k, r) => { let v = m.get(k); if (!v) { v = [0, 0, 0, 0]; m.set(k, v); } v[0] += +r.cost || 0; v[1] += +r.clk || 0; v[2] += +r.conv || 0; v[3] += +r.rev || 0; };
+    [a, b].forEach((rows) => (rows || []).forEach((r) => {
+      const l = LAND(r.landing); if (!CHS.includes(l)) return;
+      add(r.product + '|' + l + '|' + r.day, r); add('*|' + l + '|' + r.day, r);
+      if (r.day > max) max = r.day; if (r.day < min) min = r.day;
+    }));
+    idx = { m, max, min }; idxA = a; idxB = b; return idx;
+  };
+  const sum = (I, p, ch, a, b) => { const t = [0, 0, 0, 0]; for (let x = parse(a); x <= parse(b); x += DAY) { const v = I.m.get(p + '|' + ch + '|' + iso(x)); if (v) for (let i = 0; i < 4; i++) t[i] += v[i]; } return t; };
+  const kp = (t, n) => ({ costDay: t[0] / n, roas: t[0] ? t[3] / t[0] : null, cvr: t[1] ? t[2] / t[1] : null });
+
+  const events = (promo, I) => {
+    const ev = [];
+    promo.forEach((r) => {
+      if (!CHS.includes(r.channel) || /실매출|공구/.test(r.source || '') || !r.start) return;
+      const end = r.end || r.start;
+      if (r.start > I.max || r.start < iso(parse(I.min) + 14 * DAY)) return;
+      const e = end > I.max ? I.max : end; const n = Math.round((parse(e) - parse(r.start)) / DAY) + 1;
+      if (n < 3) return;
+      ev.push({ name: r.name, src: r.source, ch: r.channel, start: r.start, end, e, n, prod: r.main || '', k: kw(r.name), ongoing: end > I.max });
+    });
+    // 같은 행사가 여러 출처에 있으면 하나만(MD 행사표 > Teams > 캘린더)
+    ev.sort((x, y) => (RANK[x.src] ?? 3) - (RANK[y.src] ?? 3));
+    const out = [];
+    ev.forEach((x) => { if (!out.some((y) => y.ch === x.ch && y.start <= x.end && x.start <= y.end && (y.prod === x.prod || !y.prod || !x.prod) && share(x.k, y.k))) out.push(x); });
+    return out;
+  };
+
+  const compute = (I, ev) => ev.map((x) => {
+    const p = x.prod || '*'; const bn = Math.min(x.n, 14);
+    const bs = iso(parse(x.start) - bn * DAY), be = iso(parse(x.start) - DAY);
+    const D = kp(sum(I, p, x.ch, x.start, x.e), x.n), B = kp(sum(I, p, x.ch, bs, be), bn);
+    if (!B.costDay || !D.costDay) return null;
+    const costChg = D.costDay / B.costDay - 1, roasChg = D.roas != null && B.roas ? D.roas / B.roas - 1 : null;
+    const overlap = ev.some((y) => y !== x && y.ch === x.ch && (!y.prod || !x.prod || y.prod === x.prod) && y.start <= be && y.end >= bs);
+    let verdict, cls = '';
+    if (B.costDay < 0.1 * D.costDay) verdict = '비교 불가';
+    else if (roasChg >= 0.15) { verdict = 'ROAS↑'; cls = 'up'; }
+    else if (roasChg <= -0.15) { verdict = 'ROAS↓'; cls = 'dn'; }
+    else verdict = '변화 작음';
+    const note = [];
+    if (verdict === '비교 불가') note.push('직전 광고 거의 없음');
+    else if (costChg >= 1) note.push('일 광고비 ' + (costChg + 1).toFixed(1) + '배');
+    else if (costChg <= -0.5) note.push('일 광고비 ' + d3.format('.0%')(-costChg) + ' 감액');
+    if (overlap) note.push('직전 기간도 행사 중');
+    if (x.ongoing) note.push('진행 중');
+    return { ...x, prodLab: x.prod || '전 제품', D, B, costChg, roasChg, overlap, verdict, cls, note: note.join(' · ') };
+  }).filter(Boolean);
+
+  const insights = (R, I, sel) => {
+    const L = [];
+    const ok = R.filter((r) => r.verdict !== '비교 불가' && r.roasChg != null);
+    const med = (a) => d3.median(a);
+    // 1) 진행 중 행사
+    R.filter((r) => r.ongoing).sort((a, b) => (a.roasChg ?? 0) - (b.roasChg ?? 0)).slice(0, 4).forEach((r) => {
+      const budget = r.verdict === '비교 불가' ? '직전에 광고가 거의 없어 비교가 어려워요' : `일 광고비 ${fmtC(r.B.costDay)}→${fmtC(r.D.costDay)}(${(r.costChg + 1).toFixed(1)}배), ROAS ${fmtR(r.B.roas)}→${fmtR(r.D.roas)}(${fmtP(r.roasChg)})`;
+      const tail = r.verdict === 'ROAS↓' && r.costChg >= 1 ? '. 늘린 예산만큼 효율이 따라오지 않고 있어요' : r.verdict === 'ROAS↓' ? '. 예산은 크게 안 늘었는데 효율이 떨어졌어요' : r.verdict === 'ROAS↑' ? '. 행사 효과가 광고 효율에도 보이고 있어요' : '';
+      L.push({ cls: r.cls, html: [['b', `진행 중 · ${r.name}`], ['t', ` (${r.ch}, ${r.prodLab}, ${short(r.start)}~): ${budget}${tail}.`]] });
+    });
+    // 2) 예산 증액 효과
+    const big = ok.filter((r) => r.costChg >= 1), flat = ok.filter((r) => Math.abs(r.costChg) < 0.5);
+    if (big.length >= 2) {
+      const dn = big.filter((r) => r.verdict === 'ROAS↓').length, m = med(big.map((r) => r.roasChg)), mf = flat.length ? med(flat.map((r) => r.roasChg)) : null;
+      const strong = dn / big.length >= 0.6;
+      L.push({ cls: strong ? 'dn' : '', html: [['b', '광고비를 2배 이상 늘린 행사'], ['t', ` ${big.length}건 중 ${dn}건에서 ROAS가 15% 넘게 떨어졌어요(변화 중앙값 ${fmtP(m)}).` + (mf != null ? ` 광고비를 크게 안 바꾼 행사(${flat.length}건)는 중앙값 ${fmtP(mf)}예요.` : '') + (strong ? ' 행사 때 예산을 크게 늘리면 효율이 깎이는 경향이 있으니, 증액 폭을 나눠서 올리는 걸 검토해보세요.' : ' 증액이 효율을 일관되게 떨어뜨리지는 않았어요.')]] });
+    }
+    // 3) 제품별 패턴
+    const byP = d3.rollups(ok.filter((r) => r.prod), (v) => v, (r) => r.prod).filter(([, v]) => v.length >= 3).sort((a, b) => b[1].length - a[1].length).slice(0, sel.length ? 6 : 4);
+    byP.forEach(([p, v]) => {
+      const m = med(v.map((r) => r.roasChg)), up = v.filter((r) => r.verdict === 'ROAS↑').length, dn = v.filter((r) => r.verdict === 'ROAS↓').length;
+      const msg = Math.abs(m) < 0.1 ? '행사 자체로는 광고 ROAS가 크게 움직이지 않아요' : m > 0 ? '행사 기간에 광고 ROAS가 대체로 올라요' : '행사 기간에 광고 ROAS가 대체로 떨어져요';
+      L.push({ cls: Math.abs(m) < 0.1 ? '' : m > 0 ? 'up' : 'dn', html: [['b', p], ['t', `: 행사 ${v.length}건, ROAS 변화 중앙값 ${fmtP(m)} (오름 ${up} · 떨어짐 ${dn}). ${msg}.`]] });
+    });
+    // 4) 해석 주의
+    if (R.length) {
+      const ov = R.filter((r) => r.overlap).length;
+      L.push({ cls: '', html: [['t', `${R.length}건 중 ${ov}건은 직전 기간에도 다른 행사가 있어 '행사 vs 행사' 비교예요. ROAS는 매체 기여 매출 기준이라 행사가로 객단가가 내려간 효과도 섞여 있어요. 광고 데이터는 ${short(I.max)}까지.`]] });
+    }
+    return L;
+  };
+
+  let showAll = false;
+  const draw = () => {
+    const card = document.getElementById('card-pimpact'); if (!card) return;
+    const ul = document.getElementById('pi-ins'), tb = document.getElementById('t-pimpact'), note = document.getElementById('pi-note'), more = document.getElementById('pi-more');
+    const c = dash.data('cube'), c25 = dash.data('cube25'), pr = dash.data('promo');
+    if (c.status !== 'ok' || pr.status !== 'ok') {
+      ul.replaceChildren(el('li', '', c.status === 'error' || pr.status === 'error' ? '광고 또는 프로모션 데이터를 불러오지 못했어요.' : '계산 중이에요…'));
+      tb.replaceChildren(); more.hidden = true; return;
+    }
+    const I = index(c25.status === 'ok' ? c25.data : null, c.data);
+    const sel = (dash.params().product || []);
+    let R = compute(I, events(pr.data, I));
+    if (sel.length) R = R.filter((r) => sel.includes(r.prod));
+    R.sort((a, b) => d3.descending(a.start, b.start));
+    note.textContent = (sel.length ? sel.join('·') + ' 행사만. ' : '') + '행사 기간과 직전 같은 길이(최대 14일)의 같은 채널·제품 광고 성과를 비교해요. 공식몰·네이버 행사만, 매일 갱신되는 광고·프로모션 데이터로 자동 계산.';
+    ul.replaceChildren(...insights(R, I, sel).map((x) => { const li = el('li', x.cls); x.html.forEach(([t, s]) => li.append(t === 'b' ? el('b', '', s) : document.createTextNode(s))); return li; }));
+    if (!R.length) ul.append(el('li', '', '비교할 수 있는 행사가 없어요.'));
+    // 표
+    tb.replaceChildren();
+    const hd = el('thead'), hr = el('tr');
+    [['행사', 'l'], ['채널', 'l'], ['제품', 'l'], ['기간', 'l'], ['일 광고비 직전→행사', ''], ['ROAS 직전→행사', ''], ['ROAS 변화', ''], ['CVR 직전→행사', ''], ['판정', 'l'], ['비고', 'l']].forEach(([t, k]) => hr.append(el('th', k, t)));
+    hd.append(hr); tb.append(hd);
+    const body = el('tbody'); const rows = showAll ? R : R.slice(0, 15);
+    rows.forEach((r) => {
+      const tr = el('tr');
+      const td = (t, k) => { const x = el('td', k || '', t); tr.append(x); return x; };
+      td(r.name, 'l'); td(r.ch, 'l'); td(r.prodLab, 'l'); td(short(r.start) + '~' + short(r.end), 'l');
+      td(fmtC(r.B.costDay) + ' → ' + fmtC(r.D.costDay)); td(fmtR(r.B.roas) + ' → ' + fmtR(r.D.roas));
+      const rc = td(r.verdict === '비교 불가' ? '–' : fmtP(r.roasChg)); if (r.cls) rc.classList.add(r.cls);
+      td(fmtV(r.B.cvr) + ' → ' + fmtV(r.D.cvr));
+      const v = td('', 'l'); v.append(el('span', 'pi-tag ' + r.cls, r.verdict));
+      td(r.note, 'l');
+      body.append(tr);
+    });
+    tb.append(body);
+    more.hidden = R.length <= 15; more.textContent = showAll ? '최근 15건만 보기' : `전체 ${R.length}건 보기`;
+  };
+  document.getElementById('pi-more').addEventListener('click', () => { showAll = !showAll; draw(); });
+  dash.onData(draw);
+})();
+</script>
 </div>
 
 <button type="button" id="ai-launch" aria-controls="ai-panel" aria-expanded="false"><span class="dot"></span>AI에게 묻기</button>
@@ -2063,4 +2227,5 @@ load().then(() => { facts(); ready = !!sample; busy(false); })
 })();
 })();
 </script>
-</body></html>
+
+</body></html></body></html>
