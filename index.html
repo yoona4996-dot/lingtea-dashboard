@@ -15,7 +15,7 @@
 </form></div>
 <script>
 (() => {
-  const SALT = 'kM79Y6d9mvTCAc4Kua/Xbg==', ITER = 2000000, CHECK = 'GB4ntKqigxjWENqJu1zWHgPxIZqmE2kVBA1DE6d4pLHVSKgYrA==';
+  const SALT = 'NScIQAByjXzlEGqX/FlVkg==', ITER = 2000000, CHECK = 'vixTwAk4MaJF1ZCbdI6kHKxxRBlnkwccX24R8cmuqXrm+PMEBQ==';
   const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   let ready; const keyP = new Promise(r => ready = r);
   const dec = async (key, buf) => crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12));
@@ -441,6 +441,18 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
   </div>
 
   <div class="lx-page" id="promo" hidden>
+    <div class="lx-card" id="card-pcal">
+      <h2>프로모션 캘린더</h2>
+      <div class="pc-bar">
+        <button type="button" class="pc-nav" id="pc-prev" aria-label="이전 달">‹</button>
+        <strong class="pc-title" id="pc-title"></strong>
+        <button type="button" class="pc-nav" id="pc-next" aria-label="다음 달">›</button>
+        <button type="button" class="pc-nav pc-today" id="pc-today">이번 달</button>
+      </div>
+      <div class="pc-legend" id="pc-legend" role="group" aria-label="채널 선택"></div>
+      <p class="lx-note" id="pc-note">채널 버튼으로 켜고 끌 수 있어요. 막대에 마우스를 올리면 기간·제품·구성이 나와요. 날짜 아래 숫자는 그날 실매출(공식몰+네이버)이고, 제품 슬라이서를 고르면 그 제품 행사만 보여요.</p>
+      <div class="pc-grid" id="pc-grid"></div>
+    </div>
     <div class="lx-card" id="card-pimpact">
       <h2>프로모션 영향 인사이트</h2>
       <p class="lx-note" id="pi-note"></p>
@@ -1922,6 +1934,122 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
     more.hidden = R.length <= 15; more.textContent = showAll ? '최근 15건만 보기' : `전체 ${R.length}건 보기`;
   };
   document.getElementById('pi-more').addEventListener('click', () => { showAll = !showAll; draw(); });
+  dash.onData(draw);
+})();
+</script>
+<style>
+#card-pcal .pc-bar{display:flex;align-items:center;gap:8px;margin:2px 0 8px}
+#card-pcal .pc-title{font-size:1.15rem;min-width:7.5em;text-align:center}
+#card-pcal .pc-nav{font:inherit;border:1px solid var(--color-border-line);background:var(--color-bg);color:var(--color-fg);border-radius:var(--cds-radius);padding:2px 10px;cursor:pointer;line-height:1.6}
+#card-pcal .pc-today{font-size:var(--cds-font-size-caption);margin-left:auto}
+#card-pcal .pc-nav:focus-visible,#card-pcal .pc-lg:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
+#card-pcal .pc-legend{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+#card-pcal .pc-lg{font:inherit;font-size:var(--cds-font-size-caption);display:inline-flex;align-items:center;gap:5px;border:1px solid var(--color-border-line);background:var(--color-bg);color:var(--color-fg);border-radius:999px;padding:2px 10px;cursor:pointer}
+#card-pcal .pc-lg i{width:10px;height:10px;border-radius:3px;background:var(--c)}
+#card-pcal .pc-lg[aria-pressed="false"]{opacity:.45}
+#card-pcal .pc-lg[aria-pressed="false"] i{background:transparent;border:1px solid var(--c)}
+#card-pcal .pc-grid{border:1px solid var(--color-border-line);border-radius:var(--cds-radius);overflow:hidden}
+#card-pcal .pc-dow,#card-pcal .pc-week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+#card-pcal .pc-dow div{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);text-align:center;padding:4px 0;border-bottom:1px solid var(--color-border-line)}
+#card-pcal .pc-dow div:nth-child(6){color:#3b6fd1}#card-pcal .pc-dow div:nth-child(7){color:#c4497a}
+#card-pcal .pc-week{grid-auto-rows:auto;row-gap:2px;padding-bottom:4px;border-bottom:1px solid var(--color-border-line);position:relative;min-height:84px}
+#card-pcal .pc-week:last-child{border-bottom:0}
+#card-pcal .pc-day{grid-row:1;padding:3px 5px 2px;display:flex;justify-content:space-between;align-items:baseline;gap:4px;font-size:12px;min-width:0}
+#card-pcal .pc-day.out{opacity:.35}
+#card-pcal .pc-day.today b{background:var(--lx-acc);color:#fff;border-radius:999px;padding:0 6px}
+#card-pcal .pc-day span{font-size:10.5px;color:var(--color-fg-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#card-pcal .pc-bg{grid-row:1/-1;border-left:1px solid var(--color-border-line)}
+#card-pcal .pc-bg:first-of-type{border-left:0}
+#card-pcal .pc-bg.wk{background:color-mix(in srgb,var(--color-fg) 3%,transparent)}
+#card-pcal .pc-ev{font-size:11.5px;line-height:1.5;margin:0 3px;padding:0 6px;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:color-mix(in srgb,var(--c) 20%,var(--color-panel));border-left:3px solid var(--c);color:var(--color-fg);cursor:default;min-width:0;z-index:1}
+#card-pcal .pc-ev.cl{border-top-left-radius:0;border-bottom-left-radius:0;border-left-style:dashed}
+#card-pcal .pc-more{font-size:11px;color:var(--color-fg-muted);padding:0 6px;z-index:1}
+@media (max-width:640px){#card-pcal .pc-day span{display:none}#card-pcal .pc-ev{font-size:10.5px;padding:0 3px}}
+</style>
+<script>
+/* 프로모션 캘린더: promo.csv 행사를 월 달력에 기간 막대로 그린다(월요일 시작, 채널별 색). */
+(() => {
+  const DAY = 864e5, parse = (s) => Date.parse(s + 'T00:00:00Z'), iso = (t) => new Date(t).toISOString().slice(0, 10);
+  const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
+  const CH = [['공식몰', '#3b6fd1'], ['네이버', '#2a9d8f'], ['카카오', '#d9a400'], ['공구', '#c4497a'], ['라이브커머스', '#7a5cc7'], ['쿠팡', '#d9822b'], ['홈쇼핑', '#b0603a'], ['기타', '#8a8a85']];
+  const COL = new Map(CH), chOf = (c) => (COL.has(c) ? c : '기타');
+  const off = new Set(['기타']);
+  const LANES = 8;
+  const todayIso = new Date(Date.now() + 9 * 36e5).toISOString().slice(0, 10);
+  let month = todayIso.slice(0, 7);
+  const won = (v) => (v >= 1e8 ? (v / 1e8).toFixed(1) + '억' : v >= 1e4 ? Math.round(v / 1e4).toLocaleString() + '만' : v ? Math.round(v).toLocaleString() : '');
+  let revCache = null;
+  const revByDay = () => {
+    const s = dash.data('sales'); if (s.status !== 'ok') return new Map();
+    if (revCache && revCache.d === s.data) return revCache.m;
+    const m = new Map(); for (const r of s.data) m.set(r.day, (m.get(r.day) || 0) + (+r.rev || 0));
+    revCache = { d: s.data, m }; return m;
+  };
+  const legend = () => {
+    const box = document.getElementById('pc-legend'); box.replaceChildren();
+    CH.forEach(([c, col]) => {
+      const b = el('button', 'pc-lg'); b.type = 'button'; b.style.setProperty('--c', col); b.setAttribute('aria-pressed', off.has(c) ? 'false' : 'true');
+      b.append(el('i'), document.createTextNode(c));
+      b.addEventListener('click', () => { off.has(c) ? off.delete(c) : off.add(c); draw(); });
+      box.append(b);
+    });
+  };
+  const draw = () => {
+    const grid = document.getElementById('pc-grid'); if (!grid) return;
+    const [y, mo] = month.split('-').map(Number);
+    document.getElementById('pc-title').textContent = `${y}년 ${mo}월`;
+    legend();
+    const pr = dash.data('promo');
+    if (pr.status !== 'ok') { grid.replaceChildren(el('p', 'lx-note', pr.status === 'error' ? '프로모션 데이터를 불러오지 못했어요.' : '불러오는 중이에요…')); return; }
+    const first = Date.UTC(y, mo - 1, 1), last = Date.UTC(y, mo, 0);
+    const start = first - ((new Date(first).getUTCDay() + 6) % 7) * DAY;
+    const end = last + (6 - (new Date(last).getUTCDay() + 6) % 7) * DAY;
+    const sel = dash.params().product || [];
+    const seen = new Set();
+    const evs = pr.data.filter((x) => x.start && x.end >= iso(start) && x.start <= iso(end) && !off.has(chOf(x.channel)))
+      .filter((x) => !sel.length || sel.includes(x.main) || String(x.products || '').split('·').some((p) => sel.includes(p)))
+      .filter((x) => { const k = x.name + '|' + x.channel + '|' + x.start; if (seen.has(k)) return false; seen.add(k); return true; })
+      .map((x) => ({ x, s: parse(x.start), e: parse(x.end < x.start ? x.start : x.end) }))
+      .sort((a, b) => a.s - b.s || (b.e - b.s) - (a.e - a.s));
+    const rev = revByDay();
+    const dow = el('div', 'pc-dow'); ['월', '화', '수', '목', '금', '토', '일'].forEach((d) => dow.append(el('div', '', d)));
+    const out = [dow];
+    for (let w = start; w <= end; w += 7 * DAY) {
+      const we = w + 6 * DAY, row = el('div', 'pc-week');
+      for (let i = 0; i < 7; i++) {
+        const t = w + i * DAY, d = iso(t);
+        const bg = el('div', 'pc-bg' + (i >= 5 ? ' wk' : '')); bg.style.gridColumn = String(i + 1); row.append(bg);
+      }
+      for (let i = 0; i < 7; i++) {
+        const t = w + i * DAY, d = iso(t);
+        const c = el('div', 'pc-day' + (d.slice(0, 7) !== month ? ' out' : '') + (d === todayIso ? ' today' : '')); c.style.gridColumn = String(i + 1);
+        c.append(el('b', '', String(new Date(t).getUTCDate())));
+        const r = rev.get(d); if (r) { const s = el('span', '', won(r)); s.title = d + ' 실매출 ' + Math.round(r).toLocaleString() + '원'; c.append(s); }
+        row.append(c);
+      }
+      const lanes = []; const hidden = new Array(7).fill(0);
+      evs.filter((v) => v.s <= we && v.e >= w).forEach((v) => {
+        const a = Math.max(0, Math.round((v.s - w) / DAY)), b = Math.min(6, Math.round((v.e - w) / DAY));
+        let L = lanes.findIndex((end) => end < a); if (L < 0) { L = lanes.length; lanes.push(-1); }
+        lanes[L] = b;
+        if (L >= LANES) { for (let i = a; i <= b; i++) hidden[i]++; return; }
+        const x = v.x, bar = el('div', 'pc-ev' + (v.s < w ? ' cl' : ''), x.name);
+        bar.style.setProperty('--c', COL.get(chOf(x.channel)));
+        bar.style.gridColumn = `${a + 1} / ${b + 2}`; bar.style.gridRow = String(L + 2);
+        bar.title = [x.name, `${x.channel} · ${x.start.slice(5).replace('-', '/')} ~ ${x.end.slice(5).replace('-', '/')}`, x.main ? '제품: ' + (x.products || x.main) : '', x.items ? '구성: ' + x.items : '', x.gift ? '사은품: ' + x.gift : '', x.source ? '출처: ' + x.source : ''].filter(Boolean).join('\n');
+        row.append(bar);
+      });
+      hidden.forEach((n, i) => { if (!n) return; const m = el('div', 'pc-more', `+${n}개 더`); m.style.gridColumn = String(i + 1); m.style.gridRow = String(LANES + 2); m.title = evs.filter((v) => v.s <= w + i * DAY && v.e >= w + i * DAY).map((v) => v.x.channel + ' · ' + v.x.name).join('\n'); row.append(m); });
+      out.push(row);
+    }
+    grid.replaceChildren(...out);
+    const n = evs.filter((v) => v.s <= last && v.e >= first).length;
+    document.getElementById('pc-note').textContent = `${mo}월에 걸친 행사 ${n}건${sel.length ? ' (' + sel.join('·') + ')' : ''}. 채널 버튼으로 켜고 끌 수 있어요. 막대에 마우스를 올리면 기간·제품·구성이 나와요. 날짜 옆 숫자는 그날 실매출(공식몰+네이버)이에요.`;
+  };
+  const shift = (k) => { const [y, m] = month.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + k, 1)); month = d.toISOString().slice(0, 7); draw(); };
+  document.getElementById('pc-prev').addEventListener('click', () => shift(-1));
+  document.getElementById('pc-next').addEventListener('click', () => shift(1));
+  document.getElementById('pc-today').addEventListener('click', () => { month = todayIso.slice(0, 7); draw(); });
   dash.onData(draw);
 })();
 </script>
