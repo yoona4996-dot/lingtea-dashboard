@@ -15,7 +15,7 @@
 </form></div>
 <script>
 (() => {
-  const SALT = 'MGPLqkdb5wy8x3PvneDRDA==', ITER = 2000000, CHECK = 'vbiTIBpPjsc/IJ0kyyvHHzj16GcINUHsk5GDyGALI9v9TRGI8A==';
+  const SALT = 'ieVyw7INQqyKHGuie7J2SQ==', ITER = 2000000, CHECK = 'rF4nT4vqTvKlDVb4DZQDbJZt82s+qixVwQxLFiJ/KsvIRKT45g==';
   const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   let ready; const keyP = new Promise(r => ready = r);
   const dec = async (key, buf) => crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12));
@@ -1580,14 +1580,14 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
       const a = byKey(curR, (r) => r.product), b = byKey(prevR, (r) => r.product);
       const keys = [...a.keys()].sort((x, y) => a.get(y).rev - a.get(x).rev);
       const t = document.getElementById('t-product'); t.replaceChildren();
-      head(t, ['제품', '매출액', '총비용', 'ROAS', '전환', 'CPA', 'AOV', 'CVR', '실매출', 'MER', '매출 비교', 'ROAS 비교', '비용 비교']);
+      head(t, ['제품', '매출액', '노출', '클릭', 'CTR', 'CPC', '총비용', 'ROAS', '전환', 'CPA', 'AOV', 'CVR', '실매출', 'MER', '매출 비교', 'ROAS 비교', '비용 비교']);
       const tb = el('tbody'); const mx = d3.max(keys, (k) => a.get(k).rev) || 1;
       const SS = salesIn(s, e); const sOk = SS && SS.covers; const sCost = sOk ? null : (SS ? byKey(curR.filter((r) => SS.has(r.day)), (r) => r.product) : null);
       document.getElementById('product-note').textContent = '매출액 내림차순. 막대는 매출액 크기. 행을 누르면 그 제품만 골라져요. 실매출·MER은 ' + chLab() + ' 실매출 제품군 기준이라 이름이 같은 제품에만 나와요' + (SS && !SS.covers ? ` (실매출은 ${short(SS.smax)}까지라 그 날짜까지의 광고비로 MER을 계산했어요)` : '') + '.';
       keys.forEach((k) => {
         const x = a.get(k), y = b.get(k) || agg([]); const tr = el('tr'); tr.append(el('td', 'l', k));
         const tdr = tdN(fmtN(x.rev)); const bar = el('span', 'lx-bar'); bar.style.width = Math.round(60 * x.rev / mx) + 'px'; tdr.append(bar); tr.append(tdr);
-        [fmtN(x.cost), fmtR(x.roas), fmtN(x.conv), fmtN(x.cpa), fmtN(x.aov), fmtP2(x.cvr)].forEach((v) => tr.append(tdN(v)));
+        [fmtN(x.imp), fmtN(x.clk), fmtP2(x.ctr), fmtN(x.cpc), fmtN(x.cost), fmtR(x.roas), fmtN(x.conv), fmtN(x.cpa), fmtN(x.aov), fmtP2(x.cvr)].forEach((v) => tr.append(tdN(v)));
         const gk = k.trim(); const hasG = SS && SS.rows.length && salesRowsE().some((r) => r.group === gk);
         const co = sOk ? x.cost : (sCost && sCost.get(k) ? sCost.get(k).cost : 0);
         salesCells(SS, SS ? SS.byGroup.get(gk) || 0 : 0, co, hasG).forEach((v) => tr.append(tdN(v)));
