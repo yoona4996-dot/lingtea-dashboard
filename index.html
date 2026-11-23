@@ -15,7 +15,7 @@
 </form></div>
 <script>
 (() => {
-  const SALT = 'YeCTog6sSI9UupOavThEHw==', ITER = 2000000, CHECK = 'e3ry+qZo1ibFOTM3vSoOQztdaxs5de/oSL2bCzrRbOFTV85qaQ==';
+  const SALT = 'NCx2rnmjgPc3OI4EofaT3A==', ITER = 2000000, CHECK = 'vpTUxIok53zBPp5I7opQsBJP4f42R2xw0PaF8JZNq2bFmU5yMA==';
   const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   let ready; const keyP = new Promise(r => ready = r);
   const dec = async (key, buf) => crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12));
@@ -375,6 +375,11 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
       <h2>제품 × 매체</h2>
       <p class="lx-note">선택 기간 매체별 매출액과 ROAS. 비용이 없는 칸은 비워 뒀어요.</p>
       <div class="lx-tw"><table class="lx-t" id="t-pxm" data-source="cube"></table></div>
+    </div>
+    <div class="lx-card" id="card-pmonth">
+      <h2>제품 월별 비교</h2>
+      <p class="lx-note" id="pmonth-note"></p>
+      <div class="lx-tw"><table class="lx-t" id="t-pmonth" data-source="cube"></table></div>
     </div>
     <div class="lx-card" id="card-pday">
       <h2 id="pday-title">제품 일자별 요약</h2>
@@ -1603,6 +1608,37 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
       const tbx = el('tbody');
       keys.forEach((k) => { const tr = el('tr'); tr.append(el('td', 'l', k)); meds.forEach((m) => { const v = pm.get(k + '\u0001' + m); tr.append(tdN(v && v.cost ? fmtN(v.rev) : ''), tdN(v && v.cost ? fmtR(v.roas) : '')); }); tbx.append(tr); });
       tx.append(tbx);
+      // product x month
+      {
+        const endT = parse(e); const mkey = (t) => { const d = new Date(t); return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0'); };
+        const selY = new Set(P().pyear || []);
+        const selM = new Set((P().pmonth || []).length ? P().pmonth : selY.size ? [...new Set(f.filter((r) => selY.has(r.year)).map((r) => r.month))] : []);
+        const ed = new Date(endT), sd = new Date(parse(s)); const m0 = Math.min(Date.UTC(sd.getUTCFullYear(), sd.getUTCMonth(), 1), Date.UTC(ed.getUTCFullYear(), ed.getUTCMonth() - 2, 1));
+        const mr = selM.size ? f.filter((r) => selM.has(r.month) && r.t <= endT) : f.filter((r) => r.t >= m0 && r.t <= endT);
+        const mks = [...new Set(mr.map((r) => mkey(r.t)))].sort();
+        const partial = (k) => k === mkey(endT) && mkey(endT + DAY) === k;
+        const mlab = (k) => k.slice(2, 4) + '년 ' + Number(k.slice(5)) + '월' + (partial(k) ? `(~${short(e)})` : '');
+        const pmm = new Map(d3.rollups(mr, agg, (r) => r.product + '\u0001' + mkey(r.t)));
+        const tot = new Map(d3.rollups(mr, agg, (r) => r.product));
+        const pk = [...tot.keys()].sort((x, y) => tot.get(y).rev - tot.get(x).rev);
+        const two = mks.length >= 2; const mA = mks[mks.length - 1], mB = mks[mks.length - 2];
+        document.getElementById('pmonth-note').textContent = (selM.size ? `슬라이서에서 고른 ${mks.length}개월을 제품별로 나란히 보여줘요.` : '월을 안 고르면 선택 기간이 걸친 월(최소 최근 3개월)을 보여줘요. 슬라이서에서 월을 고르면 고른 월끼리 비교돼요.') + ' 제품·매체 등 다른 슬라이서도 같이 적용돼요.' + (two ? ` 끝의 비교 열은 ${mlab(mA)} vs ${mlab(mB)}` + (partial(mA) ? '이고, 마지막 달은 종료일까지 누적이라 금액이 작게 나와요.' : '이에요.') : '');
+        const tm = document.getElementById('t-pmonth'); tm.replaceChildren();
+        const h1 = el('tr'), h2 = el('tr'); const th0 = el('th', 'l', '제품'); th0.rowSpan = 2; h1.append(th0);
+        mks.forEach((k) => { const c = el('th', '', mlab(k)); c.colSpan = 3; c.style.textAlign = 'center'; h1.append(c); h2.append(el('th', '', '매출액'), el('th', '', '총비용'), el('th', '', 'ROAS')); });
+        if (two) { const c = el('th', '', '전월 비교'); c.colSpan = 3; c.style.textAlign = 'center'; h1.append(c); h2.append(el('th', '', '매출'), el('th', '', 'ROAS'), el('th', '', '비용')); }
+        const thm = el('thead'); thm.append(h1, h2); tm.append(thm);
+        const tbm = el('tbody');
+        const row = (name, get, c) => {
+          const tr = el('tr', c); tr.append(el('td', 'l', name));
+          mks.forEach((k) => { const v = get(k); tr.append(tdN(v && (v.cost || v.rev) ? fmtN(v.rev) : ''), tdN(v && v.cost ? fmtN(v.cost) : ''), tdN(v && v.cost ? fmtR(v.roas) : '')); });
+          if (two) { const x = get(mA) || agg([]), y = get(mB) || agg([]); [['rev', x.rev, y.rev], ['roas', x.roas, y.roas], ['cost', x.cost, y.cost]].forEach(([kk, p, q]) => { const d = !(x.cost || x.rev) ? { txt: '', good: 0 } : y.cost || y.rev ? delta(kk, p, q) : { txt: '신규', good: 0 }; tr.append(tdN(d.txt, cls(d.good))); }); }
+          tbm.append(tr);
+        };
+        pk.forEach((k) => row(k, (m) => pmm.get(k + '\u0001' + m)));
+        const mt = new Map(d3.rollups(mr, agg, (r) => mkey(r.t))); row('합계', (m) => mt.get(m), 'tot');
+        tm.append(tbm);
+      }
       // single-product daily
       const sel = P().product || []; const tp = document.getElementById('t-pday'); tp.replaceChildren();
       if (sel.length === 1) {
