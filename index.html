@@ -15,7 +15,7 @@
 </form></div>
 <script>
 (() => {
-  const SALT = 'NCx2rnmjgPc3OI4EofaT3A==', ITER = 2000000, CHECK = 'vpTUxIok53zBPp5I7opQsBJP4f42R2xw0PaF8JZNq2bFmU5yMA==';
+  const SALT = 'ue4qIdt4tPQC5VulYfUFjQ==', ITER = 2000000, CHECK = 'V1YmRE6lQX9QCgCvyD/H3zEJrJaS2ufhZz75cLTF/Km9NhWE8w==';
   const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   let ready; const keyP = new Promise(r => ready = r);
   const dec = async (key, buf) => crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12));
@@ -553,7 +553,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
   const chMissing = () => ((P().schan || []).length ? [] : allCh().filter((ch) => !effCh().includes(ch)));
   let salesECache = null;
   const salesRowsE = () => { const all = salesRows(); const key = effCh().join('|'); if (salesECache && salesECache.a === all && salesECache.k === key) return salesECache.rows; const ch = new Set(effCh()); const rows = all.filter((r) => ch.has(r.channel)); salesECache = { a: all, k: key, rows }; return rows; };
-  const sagg = (rows) => { const t = { imp: 0, cart: 0, ord: 0, qty: 0, rev: 0, promo: 0, gb: 0 }; rows.forEach((r) => { t.imp += r.imp; t.cart += r.cart; t.ord += r.ord; t.qty += r.qty; t.rev += r.rev; if (r.kind === '프로모션') t.promo += r.rev; if (r.kind === '공구') t.gb += r.rev; }); t.aov = t.ord ? t.rev / t.ord : 0; t.cvr = t.imp ? t.ord / t.imp : 0; return t; };
+  const sagg = (rows) => { const t = { imp: 0, cart: 0, ord: 0, qty: 0, rev: 0, promo: 0, gb: 0 }; rows.forEach((r) => { t.imp += r.imp; t.cart += r.cart; t.ord += r.ord; if (!(r.channel === '공식몰' && r.day >= '2026-11-11')) t.ordI = (t.ordI || 0) + r.ord; t.qty += r.qty; t.rev += r.rev; if (r.kind === '프로모션') t.promo += r.rev; if (r.kind === '공구') t.gb += r.rev; }); t.aov = t.ord ? t.rev / t.ord : 0; t.cvr = t.imp ? (t.ordI || 0) / t.imp : 0; return t; };
   // 실매출: 기간·제품·실매출 슬라이서 적용, 날짜별/제품군별 합. 실매출 범위 밖 날짜는 null.
   const salesIn = (s, e) => {
     const sr = salesRowsE(); if (!sr.length) return null; const ech = effCh();
@@ -1670,7 +1670,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-bod
         kb.replaceChildren(b); ['t-sales-group', 't-sales-box', 't-sales-promo', 't-sales-items'].forEach((id) => document.getElementById(id).replaceChildren()); document.getElementById('ch-sales').replaceChildren();
         return;
       }
-      note.textContent = `${chLab()} 상품별 일별 실매출(공식몰은 카페24 판매금액, 네이버는 스마트스토어 판매금액(순)). ${short(s2)}~${short(e2)} 기준` + (chMissing().length ? ` · ${chMissing().map((ch) => ch + '은 ' + covTxt(ch) + '만 있어서 빠짐').join(', ')}` : '') + (e > smax ? ` (실매출은 ${short(smax)}까지라 그 뒤 날짜는 빠졌어요)` : '') + '. 위쪽 기간·제품 슬라이서도 같이 적용돼요.';
+      note.textContent = `${chLab()} 상품별 일별 실매출(공식몰은 카페24 판매금액, 11/11부터는 주문조회 판매가 합계라 노출수가 없어 실 전환율에서 빠져요. 네이버는 스마트스토어 판매금액(총)). ${short(s2)}~${short(e2)} 기준` + (chMissing().length ? ` · ${chMissing().map((ch) => ch + '은 ' + covTxt(ch) + '만 있어서 빠짐').join(', ')}` : '') + (e > smax ? ` (실매출은 ${short(smax)}까지라 그 뒤 날짜는 빠졌어요)` : '') + '. 위쪽 기간·제품 슬라이서도 같이 적용돼요.';
       const p = P(); const prodSel = new Set(p.product || []); const sb = new Set(p.sbox || []), sk = new Set(p.skind || []), sp2 = new Set(p.spromo || []);
       const sf = (rows) => rows.filter((r) => (!prodSel.size || prodSel.has(r.group)) && (!sb.size || sb.has(r.box)) && (!sk.size || sk.has(r.kind)) && (!sp2.size || sp2.has(r.promo)));
       const [cs2, ce2, cn2] = cmpRange(s2, e2);
