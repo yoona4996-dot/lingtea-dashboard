@@ -15,7 +15,7 @@
 </form></div>
 <script>
 (() => {
-  const SALT = 'NdVxPRzsG6wJwXgxQdO2iA==', ITER = 2000000, CHECK = 'zp/sWXNzdFQB7p9Z6wREAt4oISM6o3lZ42kARBK46ewToqx84Q==';
+  const SALT = 'cv93QQ1XB9iigW3daYIWjQ==', ITER = 2000000, CHECK = 'bPeVfnkws/KZID7/MuLxMycJA6bFRcVFO2xpilbVxQDakY9d6w==';
   const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   let ready; const keyP = new Promise(r => ready = r);
   const dec = async (key, buf) => crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12));
